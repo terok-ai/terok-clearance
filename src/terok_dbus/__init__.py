@@ -5,6 +5,8 @@
 
 import logging
 
+from dbus_fast import DBusError
+
 from terok_dbus._notifier import DbusNotifier
 from terok_dbus._null import NullNotifier
 from terok_dbus._protocol import Notifier
@@ -36,7 +38,7 @@ async def create_notifier(app_name: str = "terok") -> Notifier:
     notifier = DbusNotifier(app_name)
     try:
         await notifier._connect()
-    except Exception:
-        _log.debug("D-Bus session bus unavailable, falling back to NullNotifier")
+    except (OSError, DBusError) as exc:
+        _log.debug("D-Bus session bus unavailable, falling back to NullNotifier: %s", exc)
         return NullNotifier()
     return notifier

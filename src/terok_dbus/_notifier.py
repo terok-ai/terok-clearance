@@ -3,6 +3,7 @@
 
 """Desktop notifier backed by dbus-fast and the freedesktop Notifications spec."""
 
+import asyncio
 from collections.abc import Callable, Sequence
 
 from dbus_fast.aio import MessageBus
@@ -27,6 +28,7 @@ class DbusNotifier:
         self._bus: MessageBus | None = None
         self._interface: object | None = None
         self._callbacks: dict[int, Callable[[str], None]] = {}
+        self._connect_lock = asyncio.Lock()
 
     async def _connect(self) -> None:
         """Establish the session-bus connection and subscribe to signals."""
@@ -70,7 +72,9 @@ class DbusNotifier:
             Server-assigned notification ID.
         """
         if self._interface is None:
-            await self._connect()
+            async with self._connect_lock:
+                if self._interface is None:
+                    await self._connect()
 
         actions_flat: list[str] = []
         for action_id, label in actions:
@@ -112,8 +116,11 @@ class DbusNotifier:
 
     async def disconnect(self) -> None:
         """Tear down the session-bus connection."""
+        if self._interface is not None:
+            self._interface.off_action_invoked(self._handle_action)
+            self._interface.off_notification_closed(self._handle_closed)
         if self._bus is not None:
             self._bus.disconnect()
-            self._bus = None
-            self._interface = None
-            self._callbacks.clear()
+        self._bus = None
+        self._interface = None
+        self._callbacks.clear()

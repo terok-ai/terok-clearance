@@ -61,6 +61,15 @@ class TestDbusNotifierConnect:
             assert notifier._interface is None
             assert notifier._callbacks == {}
 
+    async def test_disconnect_unsubscribes_signals(self, mock_bus: MagicMock):
+        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+            notifier = DbusNotifier()
+            await notifier._connect()
+            iface = mock_bus.get_proxy_object.return_value.get_interface.return_value
+            await notifier.disconnect()
+            iface.off_action_invoked.assert_called_once_with(notifier._handle_action)
+            iface.off_notification_closed.assert_called_once_with(notifier._handle_closed)
+
 
 class TestDbusNotifierNotify:
     """Notification sending tests."""
