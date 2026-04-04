@@ -37,7 +37,7 @@ class MockShield1(ServiceInterface):
         self._verdict_log: list[tuple[str, str]] = []
         self._sig_args: list = []
 
-    @signal()
+    @signal(name="ConnectionBlocked")
     def connection_blocked(self) -> "ssqqss":
         """Emit a ConnectionBlocked signal."""
         return self._sig_args
@@ -49,13 +49,13 @@ class MockShield1(ServiceInterface):
         self._sig_args = [container, dest, port, proto, domain, request_id]
         self.connection_blocked()
 
-    @method()
+    @method(name="Verdict")
     def verdict(self, request_id: "s", action: "s") -> "b":
         """Record a Verdict call and return success."""
         self._verdict_log.append((request_id, action))
         return True
 
-    @signal()
+    @signal(name="VerdictApplied")
     def verdict_applied(self) -> "ssssb":
         """Emit a VerdictApplied signal."""
         return self._sig_args
@@ -79,7 +79,7 @@ class MockClearance1(ServiceInterface):
         self._resolve_log: list[tuple[str, str]] = []
         self._sig_args: list = []
 
-    @signal()
+    @signal(name="RequestReceived")
     def request_received(self) -> "ssssqs":
         """Emit a RequestReceived signal."""
         return self._sig_args
@@ -91,13 +91,13 @@ class MockClearance1(ServiceInterface):
         self._sig_args = [request_id, project, task, dest, port, reason]
         self.request_received()
 
-    @method()
+    @method(name="Resolve")
     def resolve(self, request_id: "s", action: "s") -> "b":
         """Record a Resolve call and return success."""
         self._resolve_log.append((request_id, action))
         return True
 
-    @signal()
+    @signal(name="RequestResolved")
     def request_resolved(self) -> "ssas":
         """Emit a RequestResolved signal."""
         return self._sig_args
