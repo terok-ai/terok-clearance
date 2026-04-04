@@ -5,7 +5,7 @@
 FROM docker.io/library/ubuntu:24.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    dbus dbus-x11 \
+    dbus \
     python3 python3-venv \
     git curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*

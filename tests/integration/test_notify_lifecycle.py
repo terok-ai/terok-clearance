@@ -18,7 +18,7 @@ pytestmark = pytest.mark.needs_dbus
 class TestNotifyLifecycle:
     """Full notification lifecycle against a real session bus."""
 
-    async def test_create_notifier_returns_dbus(self, dbus_session: str, notification_daemon: None):
+    async def test_create_notifier_returns_dbus(self, dbusmock_session, notification_daemon):
         """Factory returns DbusNotifier when the bus is live."""
         notifier = await create_notifier()
         assert isinstance(notifier, DbusNotifier)
@@ -48,7 +48,7 @@ class TestNotifyLifecycle:
             ids.add(nid)
         assert len(ids) == 3
 
-    async def test_disconnect_is_idempotent(self, dbus_session: str, notification_daemon: None):
+    async def test_disconnect_is_idempotent(self, dbusmock_session, notification_daemon):
         """Calling disconnect() twice does not raise."""
         notifier = await create_notifier()
         assert isinstance(notifier, DbusNotifier)

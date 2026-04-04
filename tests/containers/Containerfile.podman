@@ -5,7 +5,7 @@
 FROM quay.io/podman/stable:latest
 
 RUN dnf install -y \
-    dbus dbus-x11 \
+    dbus \
     python3 python3-pip \
     git curl \
     && dnf clean all

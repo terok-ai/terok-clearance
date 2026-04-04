@@ -120,17 +120,13 @@ jobs:
         run: poetry self add "poetry-dynamic-versioning[plugin]==1.10.0"
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y dbus dbus-x11
+        run: sudo apt-get update && sudo apt-get install -y dbus
 
       - name: Install project dependencies
         run: poetry install --with test --no-interaction
 
       - name: Run integration tests
-        run: |
-          eval $(dbus-launch --sh-syntax)
-          export DBUS_SESSION_BUS_ADDRESS
-          make test-integration
-          kill $DBUS_SESSION_BUS_PID 2>/dev/null || true
+        run: make test-integration
 
       - name: Upload integration test results
         if: ${{ !cancelled() }}

@@ -39,6 +39,7 @@ tach = "^0.34.0"
 pytest = ">=7.0"
 pytest-cov = ">=4.0"
 pytest-asyncio = ">=0.21.0"
+python-dbusmock = ">=0.32"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = ">=1.5,<2"
@@ -91,7 +92,6 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["E402"]
-"tests/integration/mock_daemon.py" = ["F722", "F821"]  # dbus-fast type signatures
 
 [tool.ruff.lint.isort]
 known-first-party = ["terok_dbus"]

@@ -120,11 +120,7 @@ run_tests() {
                 set -e
                 cd $WORKSPACE_DIR
 
-                # ── Start a private D-Bus session ──
-                eval \$(dbus-launch --sh-syntax)
-                export DBUS_SESSION_BUS_ADDRESS
-
-                echo \"--- dbus session: \$DBUS_SESSION_BUS_ADDRESS ---\"
+                # dbusmock handles private bus lifecycle via fixtures.
 
                 # ── Python + Poetry setup ──
                 if command -v uv >/dev/null 2>&1; then
@@ -171,8 +167,7 @@ run_tests() {
                         ;;
                 esac
 
-                # ── Cleanup ──
-                kill \$DBUS_SESSION_BUS_PID 2>/dev/null || true
+                # dbusmock fixtures handle cleanup automatically.
             '
         "
 
