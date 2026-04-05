@@ -51,12 +51,15 @@ def _build_parser() -> argparse.ArgumentParser:
 async def _notify(args: argparse.Namespace) -> None:
     """Send a single notification and print its ID."""
     notifier = await create_notifier()
-    notification_id = await notifier.notify(
-        args.summary,
-        args.body,
-        timeout_ms=args.timeout,
-    )
-    print(notification_id)  # noqa: T201
+    try:
+        notification_id = await notifier.notify(
+            args.summary,
+            args.body,
+            timeout_ms=args.timeout,
+        )
+        print(notification_id)  # noqa: T201
+    finally:
+        await notifier.disconnect()
 
 
 async def _subscribe() -> None:

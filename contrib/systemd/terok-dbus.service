@@ -19,6 +19,7 @@ Requires=dbus.socket
 
 [Service]
 Type=simple
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=terok-dbus subscribe
 Restart=on-failure
 RestartSec=5
