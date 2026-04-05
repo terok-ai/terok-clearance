@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+#
+# systemd user service for terok-dbus subscribe.
+#
+# Install:
+#   cp contrib/systemd/terok-dbus.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now terok-dbus
+#
+# Logs:
+#   journalctl --user -u terok-dbus -f
+
+[Unit]
+Description=terok D-Bus notification subscriber
+Documentation=https://github.com/terok-ai/terok-dbus
+After=dbus.socket
+Requires=dbus.socket
+
+[Service]
+Type=simple
+ExecStart=terok-dbus subscribe
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

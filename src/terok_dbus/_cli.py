@@ -11,6 +11,7 @@ subscribe   Long-running bridge: Shield1/Clearance1 D-Bus signals → desktop no
 
 import argparse
 import asyncio
+import logging
 import signal
 import sys
 
@@ -60,6 +61,10 @@ async def _notify(args: argparse.Namespace) -> None:
 
 async def _subscribe() -> None:
     """Run the event subscriber until interrupted."""
+    logging.basicConfig(
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        level=logging.INFO,
+    )
     notifier = await create_notifier()
     subscriber = EventSubscriber(notifier)
     await subscriber.start()

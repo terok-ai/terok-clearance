@@ -15,6 +15,7 @@ path = [
   "Makefile",
   "**/py.typed",
   "tests/containers/Containerfile.*",
+  "contrib/**/*.service",
 ]
 SPDX-FileCopyrightText = "2026 Jiri Vyskocil"
 SPDX-License-Identifier = "Apache-2.0"

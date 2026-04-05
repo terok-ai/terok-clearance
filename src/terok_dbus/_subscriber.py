@@ -77,6 +77,7 @@ class EventSubscriber:
         self._shield_iface = shield_proxy.get_interface(SHIELD_INTERFACE_NAME)
         self._shield_iface.on_connection_blocked(self._on_connection_blocked)
         self._shield_iface.on_verdict_applied(self._on_verdict_applied)
+        _log.info("Subscribed to %s", SHIELD_INTERFACE_NAME)
 
         clearance_node = Node.parse(CLEARANCE_XML)
         clearance_proxy = self._bus.get_proxy_object(
@@ -85,6 +86,7 @@ class EventSubscriber:
         self._clearance_iface = clearance_proxy.get_interface(CLEARANCE_INTERFACE_NAME)
         self._clearance_iface.on_request_received(self._on_request_received)
         self._clearance_iface.on_request_resolved(self._on_request_resolved)
+        _log.info("Subscribed to %s", CLEARANCE_INTERFACE_NAME)
 
     async def stop(self) -> None:
         """Unsubscribe from signals and disconnect the bus if owned."""
@@ -163,6 +165,7 @@ class EventSubscriber:
         """Create a notification for a blocked connection."""
         display = domain if domain else dest
         proto_name = _PROTO_NAMES.get(proto, str(proto))
+        _log.info("Blocked: %s:%d/%s (%s) [%s]", display, port, proto_name, container, request_id)
         nid = await self._notifier.notify(
             f"Blocked: {display}:{port}",
             f"Container: {container}\nProtocol: {proto_name}",
@@ -179,6 +182,7 @@ class EventSubscriber:
         self, container: str, dest: str, request_id: str, action: str, ok: bool
     ) -> None:
         """Update the notification in-place with the verdict result."""
+        _log.info("Verdict: %s %s → %s (ok=%s)", container, dest, action, ok)
         nid = self._nid_for_request(request_id)
         if nid is None:
             return
@@ -203,6 +207,7 @@ class EventSubscriber:
         reason: str,
     ) -> None:
         """Create a notification for a clearance request."""
+        _log.info("Clearance: %s/%s wants %s:%d [%s]", project, task, dest, port, request_id)
         nid = await self._notifier.notify(
             f"Task {task} wants {dest}:{port}",
             f"Project: {project}\nReason: {reason}",
@@ -217,6 +222,7 @@ class EventSubscriber:
 
     async def _handle_request_resolved(self, request_id: str, action: str, ips: list[str]) -> None:
         """Update the notification in-place with the resolution result."""
+        _log.info("Resolved: %s → %s (ips=%s)", request_id, action, ips)
         nid = self._nid_for_request(request_id)
         if nid is None:
             return
@@ -235,6 +241,7 @@ class EventSubscriber:
 
     async def _send_verdict(self, request_id: str, action: str) -> None:
         """Send a Shield1.Verdict method call."""
+        _log.info("Sending verdict: %s → %s", request_id, action)
         try:
             await self._shield_iface.call_verdict(request_id, action)
         except Exception:
@@ -242,6 +249,7 @@ class EventSubscriber:
 
     async def _send_resolve(self, request_id: str, action: str) -> None:
         """Send a Clearance1.Resolve method call."""
+        _log.info("Sending resolve: %s → %s", request_id, action)
         try:
             await self._clearance_iface.call_resolve(request_id, action)
         except Exception:
