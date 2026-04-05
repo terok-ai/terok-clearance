@@ -7,6 +7,7 @@ import logging
 
 from dbus_fast import DBusError
 
+from terok_dbus._callback import CallbackNotifier, Notification
 from terok_dbus._interfaces import (
     CLEARANCE_BUS_NAME,
     CLEARANCE_INTERFACE_NAME,
@@ -23,8 +24,10 @@ from terok_dbus._protocol import Notifier
 from terok_dbus._subscriber import EventSubscriber
 
 __all__ = [
+    "CallbackNotifier",
     "DbusNotifier",
     "EventSubscriber",
+    "Notification",
     "NullNotifier",
     "Notifier",
     "create_notifier",

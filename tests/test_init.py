@@ -14,8 +14,10 @@ class TestPublicApi:
 
     def test_all_exports(self):
         expected = {
+            "CallbackNotifier",
             "DbusNotifier",
             "EventSubscriber",
+            "Notification",
             "NullNotifier",
             "Notifier",
             "create_notifier",

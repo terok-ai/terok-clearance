@@ -90,6 +90,16 @@ async def _handle_subscribe() -> None:
         await notifier.disconnect()
 
 
+# ── Clearance handler ────────────────────────────────────
+
+
+async def _handle_clearance() -> None:
+    """Run the interactive terminal clearance tool."""
+    from terok_dbus._clearance import run_clearance  # tach-ignore
+
+    await run_clearance()
+
+
 # ── Command definitions ───────────────────────────────────
 
 COMMANDS: tuple[CommandDef, ...] = (
@@ -113,5 +123,10 @@ COMMANDS: tuple[CommandDef, ...] = (
         name="subscribe",
         help="Bridge Shield1/Clearance1 D-Bus signals to desktop notifications",
         handler=_handle_subscribe,
+    ),
+    CommandDef(
+        name="clearance",
+        help="Interactive terminal tool for shield clearance verdicts",
+        handler=_handle_clearance,
     ),
 )
