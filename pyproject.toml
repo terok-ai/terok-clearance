@@ -51,7 +51,7 @@ mkdocs-section-index = ">=0.3"
 mkdocs-terok = {url = "https://github.com/terok-ai/mkdocs-terok/releases/download/v0.1.0/mkdocs_terok-0.1.0-py3-none-any.whl"}
 
 [tool.poetry.scripts]
-terok-dbus-notify = "terok_dbus._cli:main"
+terok-dbus = "terok_dbus._cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

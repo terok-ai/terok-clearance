@@ -1,24 +1,35 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""CLI entry point for ``terok-dbus-notify`` — send a test notification."""
+"""CLI entry point for ``terok-dbus`` — desktop notification tools.
+
+Subcommands
+-----------
+notify      Send a one-shot desktop notification.
+subscribe   Long-running bridge: Shield1/Clearance1 D-Bus signals → desktop notifications.
+"""
 
 import argparse
 import asyncio
+import signal
 import sys
 
-from terok_dbus import create_notifier
+from terok_dbus import EventSubscriber, create_notifier
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser for terok-dbus-notify."""
+    """Build the top-level argument parser with subcommands."""
     parser = argparse.ArgumentParser(
-        prog="terok-dbus-notify",
-        description="Send a desktop notification via D-Bus.",
+        prog="terok-dbus",
+        description="Desktop notification tools for the terok ecosystem.",
     )
-    parser.add_argument("summary", help="Notification title")
-    parser.add_argument("body", nargs="?", default="", help="Notification body text")
-    parser.add_argument(
+    sub = parser.add_subparsers(dest="command")
+
+    # ── notify ─────────────────────────────────────────────────────
+    notify = sub.add_parser("notify", help="Send a one-shot desktop notification.")
+    notify.add_argument("summary", help="Notification title")
+    notify.add_argument("body", nargs="?", default="", help="Notification body text")
+    notify.add_argument(
         "-t",
         "--timeout",
         type=int,
@@ -26,10 +37,17 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="MS",
         help="Expiration timeout in milliseconds (-1 = server default)",
     )
+
+    # ── subscribe ──────────────────────────────────────────────────
+    sub.add_parser(
+        "subscribe",
+        help="Bridge Shield1/Clearance1 D-Bus signals to desktop notifications.",
+    )
+
     return parser
 
 
-async def _async_main(args: argparse.Namespace) -> None:
+async def _notify(args: argparse.Namespace) -> None:
     """Send a single notification and print its ID."""
     notifier = await create_notifier()
     notification_id = await notifier.notify(
@@ -40,12 +58,37 @@ async def _async_main(args: argparse.Namespace) -> None:
     print(notification_id)  # noqa: T201
 
 
+async def _subscribe() -> None:
+    """Run the event subscriber until interrupted."""
+    notifier = await create_notifier()
+    subscriber = EventSubscriber(notifier)
+    await subscriber.start()
+    try:
+        stop = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, stop.set)
+        await stop.wait()
+    finally:
+        await subscriber.stop()
+        await notifier.disconnect()
+
+
 def main() -> None:
-    """Entry point for ``terok-dbus-notify``."""
+    """Entry point for ``terok-dbus``."""
     parser = _build_parser()
     args = parser.parse_args()
+
+    if args.command == "notify":
+        handler = _notify(args)
+    elif args.command == "subscribe":
+        handler = _subscribe()
+    else:
+        parser.print_help()
+        sys.exit(2)
+
     try:
-        asyncio.run(_async_main(args))
+        asyncio.run(handler)
     except KeyboardInterrupt:
         sys.exit(130)
 
