@@ -6,10 +6,14 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import Mock
+import io
+import sys
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 from terok_dbus._callback import Notification
-from terok_dbus._clearance import _TerminalClearance
+from terok_dbus._clearance import _TerminalClearance, run_clearance
 from terok_dbus._registry import COMMANDS
 
 
@@ -218,3 +222,67 @@ class TestClearanceRegistryEntry:
         """The clearance command takes no CLI arguments."""
         cmd = next(c for c in COMMANDS if c.name == "clearance")
         assert cmd.args == ()
+
+
+class TestRunLifecycle:
+    """Tests for the async run() lifecycle with mocked D-Bus."""
+
+    async def test_run_exits_on_quit(self, capsys) -> None:
+        """run() completes when 'q' is typed on stdin."""
+        tc = _TerminalClearance()
+        mock_subscriber = AsyncMock()
+
+        # Simulate stdin producing "q\n" then EOF
+        fake_stdin = io.StringIO("q\n")
+
+        with (
+            patch("terok_dbus.EventSubscriber", return_value=mock_subscriber),
+            patch.object(sys, "stdin", fake_stdin),
+        ):
+            await tc.run()
+
+        mock_subscriber.start.assert_awaited_once()
+        mock_subscriber.stop.assert_awaited_once()
+        out = capsys.readouterr().out
+        assert "listening" in out.lower()
+
+    async def test_run_exits_on_eof(self, capsys) -> None:
+        """run() completes when stdin hits EOF."""
+        tc = _TerminalClearance()
+        mock_subscriber = AsyncMock()
+
+        fake_stdin = io.StringIO("")  # immediate EOF
+
+        with (
+            patch("terok_dbus.EventSubscriber", return_value=mock_subscriber),
+            patch.object(sys, "stdin", fake_stdin),
+        ):
+            await tc.run()
+
+        mock_subscriber.stop.assert_awaited_once()
+
+    async def test_run_dbus_unavailable(self, capsys) -> None:
+        """run() exits with error when D-Bus connection fails."""
+        tc = _TerminalClearance()
+        mock_subscriber = AsyncMock()
+        mock_subscriber.start.side_effect = OSError("no bus")
+
+        with (
+            patch("terok_dbus.EventSubscriber", return_value=mock_subscriber),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            await tc.run()
+
+        assert exc_info.value.code == 1
+        assert "D-Bus unavailable" in capsys.readouterr().err
+
+    async def test_run_clearance_entry_point(self) -> None:
+        """run_clearance() creates and runs a _TerminalClearance."""
+        mock_subscriber = AsyncMock()
+        fake_stdin = io.StringIO("q\n")
+
+        with (
+            patch("terok_dbus.EventSubscriber", return_value=mock_subscriber),
+            patch.object(sys, "stdin", fake_stdin),
+        ):
+            await run_clearance()

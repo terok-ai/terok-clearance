@@ -14,6 +14,7 @@ serial console.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import signal
 import sys
@@ -21,8 +22,6 @@ import sys
 from terok_dbus._callback import CallbackNotifier, Notification
 
 _log = logging.getLogger(__name__)
-
-_PROTO_NAMES: dict[int, str] = {6: "TCP", 17: "UDP"}
 
 
 class _TerminalClearance:
@@ -129,6 +128,8 @@ class _TerminalClearance:
         reader = asyncio.create_task(self._read_stdin(loop))
         await self._stop.wait()
         reader.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await reader
         await subscriber.stop()
         await self._notifier.disconnect()
 
