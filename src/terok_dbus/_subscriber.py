@@ -144,13 +144,23 @@ class EventSubscriber:
         # Discover existing bridge instances
         await self._discover_instances()
 
-        # Subscribe to NameOwnerChanged for dynamic bridge start/stop
-        noc_rule = (
-            f"type='signal',sender='{_DBUS_DEST}',"
-            f"interface='{_DBUS_IFACE}',member='NameOwnerChanged'"
+        # Subscribe to NameOwnerChanged — narrowed to terok bus names only
+        # (arg0namespace matches any name starting with the prefix)
+        shield_noc_rule = (
+            f"type='signal',sender='{_DBUS_DEST}',path='{_DBUS_PATH}',"
+            f"interface='{_DBUS_IFACE}',member='NameOwnerChanged',"
+            f"arg0namespace='{SHIELD_BUS_NAME_PREFIX.rstrip('_')}'"
         )
-        await _add_match(self._bus, noc_rule)
-        self._match_rules.append(noc_rule)
+        await _add_match(self._bus, shield_noc_rule)
+        self._match_rules.append(shield_noc_rule)
+
+        clearance_noc_rule = (
+            f"type='signal',sender='{_DBUS_DEST}',path='{_DBUS_PATH}',"
+            f"interface='{_DBUS_IFACE}',member='NameOwnerChanged',"
+            f"arg0='{CLEARANCE_BUS_NAME}'"
+        )
+        await _add_match(self._bus, clearance_noc_rule)
+        self._match_rules.append(clearance_noc_rule)
 
         # Senderless match rules for Shield1 signals
         shield_rule = (
@@ -386,6 +396,7 @@ class EventSubscriber:
             timeout_ms=5000,
         )
         del self._pending[nid]
+        self._request_senders.pop(request_id, None)
 
     async def _handle_request_received(
         self,
@@ -426,6 +437,7 @@ class EventSubscriber:
             timeout_ms=5000,
         )
         del self._pending[nid]
+        self._request_senders.pop(request_id, None)
 
     # ── Method call helpers ───────────────────────────────────────────
 

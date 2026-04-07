@@ -157,14 +157,21 @@ class TestEventSubscriberStart:
         add_match_calls = [c for c in mock_bus.call.call_args_list if c[0][0].member == "AddMatch"]
         rules = [c[0][0].body[0] for c in add_match_calls]
 
-        # Should have 3 rules: NameOwnerChanged, Shield1, Clearance1
-        assert len(rules) == 3
-        # Shield1 rule has no sender=
-        shield_rule = [r for r in rules if SHIELD_INTERFACE_NAME in r][0]
+        # 4 rules: 2x NOC (shield prefix + clearance exact), Shield1, Clearance1
+        assert len(rules) == 4
+        # NOC rules are narrowed with arg0namespace / arg0
+        noc_rules = [r for r in rules if "NameOwnerChanged" in r]
+        assert len(noc_rules) == 2
+        assert any("arg0namespace=" in r for r in noc_rules)
+        assert any("arg0=" in r for r in noc_rules)
+        # Shield1 signal rule has no sender=
+        shield_rule = [r for r in rules if SHIELD_INTERFACE_NAME in r and "NameOwner" not in r][0]
         assert "sender=" not in shield_rule
         assert f"interface='{SHIELD_INTERFACE_NAME}'" in shield_rule
-        # Clearance1 rule has no sender=
-        clearance_rule = [r for r in rules if CLEARANCE_INTERFACE_NAME in r][0]
+        # Clearance1 signal rule has no sender=
+        clearance_rule = [
+            r for r in rules if CLEARANCE_INTERFACE_NAME in r and "NameOwner" not in r
+        ][0]
         assert "sender=" not in clearance_rule
 
         await sub.stop()
@@ -537,7 +544,7 @@ class TestEventSubscriberStop:
         await sub.stop()
 
         remove_calls = [c for c in mock_bus.call.call_args_list if c[0][0].member == "RemoveMatch"]
-        assert len(remove_calls) == 3  # NOC, Shield1, Clearance1
+        assert len(remove_calls) == 4  # 2x NOC + Shield1 + Clearance1
 
     async def test_stop_clears_state(self, mock_bus: MagicMock, mock_notifier: AsyncMock):
         """Stop() clears all internal tracking state."""
