@@ -70,6 +70,23 @@ async def _handle_serve() -> None:
     await serve()
 
 
+async def _handle_install_service(*, bin_path: str | None = None) -> None:
+    """Install the terok-dbus systemd user unit and reload the user daemon."""
+    import shutil
+    import sys
+
+    from terok_dbus._install import install_service  # tach-ignore
+
+    resolved = bin_path or shutil.which("terok-dbus")
+    if resolved is None:
+        resolved = f"{sys.executable} -m terok_dbus._cli"
+    dest = install_service(resolved)
+    print(f"Installed {dest}")  # noqa: T201
+    print(  # noqa: T201
+        "Enable with: systemctl --user enable --now terok-dbus"
+    )
+
+
 # ── Clearance handler ────────────────────────────────────
 
 
@@ -103,6 +120,18 @@ COMMANDS: tuple[CommandDef, ...] = (
         name="serve",
         help="Run the Shield1 clearance hub (owns org.terok.Shield1, forwards to desktop)",
         handler=_handle_serve,
+    ),
+    CommandDef(
+        name="install-service",
+        help="Install the terok-dbus systemd user unit (systemctl --user daemon-reload'd)",
+        handler=_handle_install_service,
+        args=(
+            ArgDef(
+                name="--bin-path",
+                dest="bin_path",
+                help="Override the resolved terok-dbus launcher path",
+            ),
+        ),
     ),
     CommandDef(
         name="clearance",

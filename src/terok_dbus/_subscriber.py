@@ -161,7 +161,30 @@ class EventSubscriber:
         self._match_rules.append(clearance_noc_rule)
 
         self._bus.add_message_handler(self._on_message)
+        # If the clearance service was already running at startup, NameOwnerChanged
+        # won't fire — seed the registry with its current owner (if any).
+        await self._seed_clearance_owner()
         _log.info("Subscribed to %s and %s", SHIELD_INTERFACE_NAME, CLEARANCE_INTERFACE_NAME)
+
+    async def _seed_clearance_owner(self) -> None:
+        """Populate the Clearance sender registry from the bus's current name table."""
+        if self._bus is None:
+            return
+        try:
+            reply = await self._bus.call(
+                Message(
+                    destination=_DBUS_DEST,
+                    path=_DBUS_PATH,
+                    interface=_DBUS_IFACE,
+                    member="GetNameOwner",
+                    signature="s",
+                    body=[CLEARANCE_BUS_NAME],
+                )
+            )
+        except Exception:
+            return  # Name not owned yet — NameOwnerChanged will pick it up later.
+        if reply.body:
+            self._clearance_senders[CLEARANCE_BUS_NAME] = reply.body[0]
 
     async def stop(self) -> None:
         """Unsubscribe, disconnect the bus if owned, and cancel pending tasks."""
