@@ -31,6 +31,15 @@ class DbusNotifier:
         self._callbacks: dict[int, Callable[[str], None]] = {}
         self._connect_lock = asyncio.Lock()
 
+    async def connect(self) -> None:
+        """Public entry point for eager-connecting; delegates to the internal helper.
+
+        ``notify()`` lazy-connects on first use; callers who want to verify
+        Notifications is reachable ahead of time (e.g. the hub's startup
+        probe) should call this and handle the exception themselves.
+        """
+        await self._connect()
+
     async def _connect(self) -> None:
         """Establish the session-bus connection and subscribe to signals."""
         bus = await MessageBus().connect()

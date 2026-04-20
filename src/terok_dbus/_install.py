@@ -43,7 +43,20 @@ def install_service(bin_path: Path | str) -> Path:
         The on-disk path the unit was written to.
     """
     template = _read_template()
-    rendered = template.replace("{{BIN}}", str(bin_path))
+    # ``{{BIN}}`` ends up on an ``ExecStart=`` line, which systemd tokenises
+    # with POSIX-shell rules.  Two shapes are expected:
+    #
+    #   * Single absolute path from ``shutil.which("terok-dbus")`` — no
+    #     embedded spaces on any standard install layout (pipx/system pkg).
+    #   * Multi-token ``"/usr/bin/python -m terok_dbus._cli"`` — already
+    #     space-separated tokens, correct for ``ExecStart=`` as-is.
+    #
+    # Neither needs extra quoting.  Refuse obviously awkward values (quotes,
+    # newlines) rather than emit an unreadable unit file.
+    bin_str = str(bin_path)
+    if any(ch in bin_str for ch in ('"', "'", "\n", "\r")):
+        raise ValueError(f"bin_path is not safe to embed in ExecStart=: {bin_str!r}")
+    rendered = template.replace("{{BIN}}", bin_str)
     rendered = _inject_state_dir_env(rendered, os.environ.get(STATE_DIR_ENV))
     dest = _user_systemd_dir() / UNIT_NAME
     dest.parent.mkdir(parents=True, exist_ok=True)

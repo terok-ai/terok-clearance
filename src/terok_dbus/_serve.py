@@ -20,7 +20,7 @@ import shutil
 import sys
 from collections.abc import Awaitable, Callable
 
-from dbus_fast import BusType
+from dbus_fast import BusType, RequestNameReply
 from dbus_fast.aio import MessageBus
 from dbus_fast.service import ServiceInterface, method, signal
 
@@ -48,6 +48,13 @@ _NOTIFIER_CONNECT_TIMEOUT_S = 2.0
 #: one hung bus call from burning systemd's stop-sigterm deadline.
 _CLEANUP_STEP_TIMEOUT_S = 2.0
 
+#: Upper bound on how long a single ``terok-shield allow|deny`` invocation
+#: may take.  Bounded so a hung shield (nft lock contention, crashed podman
+#: pause, slow setns) can't pin an RPC method call forever — D-Bus clients
+#: have their own reply timeout, and we want our ``VerdictApplied`` signal
+#: to go out in time to tell the caller the verdict actually failed.
+_SHIELD_CLI_TIMEOUT_S = 10.0
+
 
 async def serve() -> None:
     """Run the hub service until SIGINT/SIGTERM.
@@ -62,7 +69,18 @@ async def serve() -> None:
 
     hub = ShieldHub()
     bus.export(SHIELD_OBJECT_PATH, hub)
-    await bus.request_name(SHIELD_BUS_NAME)
+    # Fail fast when a prior hub still owns the name.  Without this check
+    # the new process silently sits in the queue, exports the object, and
+    # runs its ingester/subscriber while every ``Verdict`` method call
+    # routes to the other owner — operators see a live service that never
+    # applies their clicks.
+    reply = await bus.request_name(SHIELD_BUS_NAME)
+    if reply is not RequestNameReply.PRIMARY_OWNER:
+        bus.disconnect()
+        raise RuntimeError(
+            f"could not claim {SHIELD_BUS_NAME}: reply={reply.name} — "
+            "is another terok-dbus instance already running?"
+        )
     _log.info("Shield1 hub online (%s)", SHIELD_BUS_NAME)
 
     notifier = await _desktop_notifier()
@@ -213,7 +231,16 @@ class ShieldHub(ServiceInterface):
 
 
 async def _run_shield_cli(container: str, dest: str, action: str) -> bool:
-    """Invoke ``terok-shield allow|deny <container> <dest>`` and await completion."""
+    """Invoke ``terok-shield allow|deny <container> <dest>`` and await completion.
+
+    The subprocess has a hard timeout and swallows spawn errors so a hung
+    or missing shield binary surfaces as ``VerdictApplied ok=false`` rather
+    than propagating an OSError / TimeoutError up into the D-Bus method
+    reply (which would arrive as a cryptic ``org.freedesktop.DBus.Error.Failed``
+    in the caller's client, with no signal to drive the notification
+    replacement).  Clean ``False`` is much easier to handle everywhere
+    downstream.
+    """
     if action not in {"allow", "deny"}:
         _log.warning("Unknown verdict action %r — ignored", action)
         return False
@@ -224,18 +251,29 @@ async def _run_shield_cli(container: str, dest: str, action: str) -> bool:
     if not shield_bin:
         _log.error("terok-shield not found (neither in venv bin nor on PATH)")
         return False
-    proc = await asyncio.create_subprocess_exec(
-        shield_bin,
-        action,
-        container,
-        dest,
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stderr = await proc.stderr.read() if proc.stderr else b""
-    returncode = await proc.wait()
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            shield_bin,
+            action,
+            container,
+            dest,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except OSError as exc:
+        _log.error("failed to spawn terok-shield: %s", exc)
+        return False
+    try:
+        _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=_SHIELD_CLI_TIMEOUT_S)
+    except TimeoutError:
+        proc.kill()
+        with contextlib.suppress(Exception):
+            await proc.communicate()
+        _log.warning("shield %s timed out after %gs", action, _SHIELD_CLI_TIMEOUT_S)
+        return False
+    returncode = proc.returncode
     if returncode != 0:
-        _log.warning("shield %s failed: %s", action, stderr.decode(errors="replace").strip())
+        _log.warning("shield %s failed: %s", action, stderr_bytes.decode(errors="replace").strip())
     return returncode == 0
 
 
@@ -283,7 +321,7 @@ async def _desktop_notifier() -> Notifier:
     """
     notifier = DbusNotifier("terok-shield")
     try:
-        await asyncio.wait_for(notifier._connect(), timeout=_NOTIFIER_CONNECT_TIMEOUT_S)
+        await asyncio.wait_for(notifier.connect(), timeout=_NOTIFIER_CONNECT_TIMEOUT_S)
     except TimeoutError:
         _log.warning(
             "freedesktop Notifications timed out after %gs — desktop UI skipped, "
