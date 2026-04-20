@@ -30,34 +30,64 @@ Type=simple
 ExecStart={{BIN}} serve
 Restart=on-failure
 RestartSec=5
-# No filesystem, namespace, or syscall hardening directives here, on
-# purpose.  The hub exists to apply verdicts by shelling out to
-# `terok-shield`, which in turn drives `podman unshare nsenter nft ...`.
-# Several unit-file knobs that *seem* safe for a user service clash
-# with that call path:
+
+# ── Hardening: filesystem guards only ─────────────────────────────────
 #
-#   * `PrivateTmp`, `ProtectHome=read-only`, `ProtectSystem=full`,
-#     `PrivateDevices` — mangle the mount / capability view enough
-#     that rootless podman's re-exec-into-NS_ROOTLESS fails with
-#     "cannot re-exec process to join the existing user namespace".
+# The hub's threat model is "process-level compromise via a dbus-fast
+# parsing bug or malformed JSON from a container reader".  Constraining
+# the hub's filesystem view shrinks what such a compromise can reach —
+# an attacker sitting in the hub's memory can't read SSH keys, GPG
+# state, or shell history if $HOME is read-only; can't tamper with
+# installed binaries if /usr is read-only.  Worth having.
 #
-#   * `RestrictAddressFamilies`, `SystemCallFilter`, and similar
-#     seccomp-based restrictions — the kernel refuses to install a
-#     seccomp filter on an unprivileged process unless `no_new_privs`
-#     is set (see `seccomp(2)`).  So even `NoNewPrivileges=no` can't
-#     win: systemd has to enable NNP anyway to make the filter
-#     load, and NNP in turn makes SELinux refuse the
-#     `unconfined_t → container_runtime_t` transition that
-#     `podman unshare` triggers.  Every verdict click then fails with
-#     an `nnp_transition` AVC on SELinux-enforcing hosts (Fedora's
-#     default).
+# None of the directives in this block trigger the NNP / SELinux
+# cascade that bit us with the seccomp-based family
+# (`RestrictAddressFamilies`, `SystemCallFilter`, etc. — see the
+# *rejected* block below).
+ProtectHome=read-only
+# ProtectHome=read-only covers /run/user/$UID too, which is where the
+# event ingester needs to create and unlink its unix socket.  %t
+# expands to $XDG_RUNTIME_DIR for user units — this carves exactly the
+# path the ingester owns back into writable.
+ReadWritePaths=%t
+ProtectSystem=full
+
+# ── Rejected: anything that compiles to a seccomp filter ──────────────
 #
-# The hub runs as the operator's own uid with no privilege escalation
-# over what their shell already has, and verdicts route through the
-# auditable `terok-shield allow|deny` CLI — so the directives were
-# hardening against a threat model the hub doesn't have.  Keep this
-# section empty until there's a documented win for a specific
-# directive that *doesn't* clash with rootless podman.
+# The kernel refuses to install a seccomp filter on an unprivileged
+# process unless `no_new_privs` is set (see `seccomp(2)`).  Once NNP
+# is on, SELinux refuses the `unconfined_t → container_runtime_t`
+# transition that `podman unshare` does on every verdict apply — the
+# user sees "Allow failed: X" on every click with an `nnp_transition`
+# AVC in the audit log.  `NoNewPrivileges=no` in the unit does NOT win
+# that fight: systemd has to enable NNP to make the seccomp filter
+# load at all.
+#
+# Directives that compile to seccomp and therefore cannot be used:
+#
+#   RestrictAddressFamilies=
+#   SystemCallFilter=  SystemCallArchitectures=  SystemCallLog=
+#   MemoryDenyWriteExecute=yes
+#   LockPersonality=yes
+#   RestrictNamespaces=
+#   RestrictRealtime=yes
+#   RestrictSUIDSGID=yes
+#   NoExecPaths=  ExecPaths=
+#
+# Directives that *explicitly* imply NNP (per systemd.exec(5)) and
+# therefore also cannot be used:
+#
+#   PrivateDevices=yes
+#   ProtectKernelTunables=yes  ProtectKernelModules=yes
+#   ProtectKernelLogs=yes  ProtectClock=yes
+#   DynamicUser=yes  ProtectHostname=yes
+#
+# A separate ``terok-verdict`` helper service (that does the
+# ``terok-shield allow|deny`` exec without NNP, talking to this hub
+# over a local socket) would recover this hardening — see the
+# deferred plan in the terok-dbus design notes.  That's the proper
+# long-term fix; for now the filesystem guards above are what we can
+# do without splitting the process tree.
 
 [Install]
 WantedBy=default.target
