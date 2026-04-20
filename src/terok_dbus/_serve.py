@@ -248,20 +248,33 @@ def _find_shield_binary() -> str | None:
 async def _desktop_notifier() -> Notifier:
     """Prefer a real D-Bus notifier; fall through to null on headless / slow hosts.
 
-    Bound the connect attempt so the hub's startup doesn't block for tens of
-    seconds when the freedesktop Notifications service is slow to respond
-    (headless boxes, a desktop coming up, a dbus-daemon under load).
-    ``terok setup`` runs ``systemctl --user restart terok-dbus`` and waits
-    for the service to start — the systemd default stop-timeout is short
-    and unforgiving, so a slow notifier startup cascades into the whole
-    setup feeling stuck.  Two seconds is plenty on a live session, and the
-    ``NullNotifier`` fallback keeps verdict dispatch working end-to-end
-    even when desktop UI isn't available.
+    Bound the connect at two seconds so a live desktop session doesn't have
+    to wait for dbus-daemon's default round-trip timeout.  We distinguish
+    three outcomes so the log reflects what actually happened:
+
+    * **Connected.** Use the real notifier.
+    * **Timed out.** The Notifications interface *does* exist on the bus
+      (otherwise the call would fail fast with NotFound/NoReply) but isn't
+      answering in time.  Emit a WARNING — something is wrong on this host;
+      the operator should investigate.
+    * **Actually unavailable.** No service registers the Notifications
+      interface at all — headless box, CI container, minimal session.
+      INFO is right: expected and routine, no action required.
+
+    Verdict dispatch still works through the ``NullNotifier`` fallback in
+    both failure cases; the log-level split is purely to help the operator
+    tell "works as designed" apart from "fix your desktop stack".
     """
     notifier = DbusNotifier("terok-shield")
     try:
         await asyncio.wait_for(notifier._connect(), timeout=2.0)
-    except (TimeoutError, Exception) as exc:  # noqa: BLE001
+    except TimeoutError:
+        _log.warning(
+            "freedesktop Notifications timed out after 2s — desktop UI skipped, "
+            "investigate dbus-daemon / notification daemon health"
+        )
+        return NullNotifier()
+    except Exception as exc:  # noqa: BLE001
         _log.info("freedesktop Notifications unavailable (%s) — skipping desktop UI", exc)
         return NullNotifier()
     return notifier
