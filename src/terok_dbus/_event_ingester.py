@@ -85,20 +85,25 @@ class EventIngester:
 
     async def stop(self) -> None:
         """Close the server and await any in-flight client tasks."""
+        # Cancel client handlers *before* awaiting ``wait_closed()``: from
+        # Python 3.12.1 onwards the server tracks active connections and
+        # ``wait_closed()`` blocks until every one of them returns.  If we
+        # waited first we'd deadlock against our own accepted tasks.
         if self._server is not None:
             self._server.close()
-            await self._server.wait_closed()
-            self._server = None
         for task in list(self._clients):
             task.cancel()
         for task in list(self._clients):
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
+        if self._server is not None:
+            await self._server.wait_closed()
+            self._server = None
         with contextlib.suppress(FileNotFoundError):
             self._socket_path.unlink()
 
     async def _handle_client(
-        self, reader: asyncio.StreamReader, _writer: asyncio.StreamWriter
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         """Read newline-delimited JSON events until the peer disconnects."""
         task = asyncio.current_task()
@@ -113,6 +118,9 @@ class EventIngester:
         finally:
             if task is not None:
                 self._clients.discard(task)
+            writer.close()
+            with contextlib.suppress(Exception):
+                await writer.wait_closed()
 
     async def _dispatch(self, raw: bytes) -> None:
         """Decode one line and forward it to the caller-supplied sink."""
