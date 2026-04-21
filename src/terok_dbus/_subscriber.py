@@ -293,9 +293,13 @@ class EventSubscriber:
             container, request_id, action, ok = msg.body
             self._dispatch(self._handle_verdict_applied(container, request_id, action, ok))
         elif msg.member == "ContainerStarted" and len(msg.body) == 1:
-            _log.info("Container started: %s", msg.body[0])
+            (container,) = msg.body
+            _log.info("Container started: %s", container)
+            self._dispatch_lifecycle("on_container_started", container)
         elif msg.member == "ContainerExited" and len(msg.body) == 2:
-            _log.info("Container exited: %s (reason=%s)", msg.body[0], msg.body[1])
+            container, reason = msg.body
+            _log.info("Container exited: %s (reason=%s)", container, reason)
+            self._dispatch_lifecycle("on_container_exited", container, reason)
 
     def _on_clearance_signal(self, msg: Message) -> None:
         """Dispatch Clearance1 signals after validating the sender."""
@@ -463,6 +467,22 @@ class EventSubscriber:
         task = asyncio.get_running_loop().create_task(coro)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
+
+    def _dispatch_lifecycle(self, method: str, *args: str) -> None:
+        """Invoke a lifecycle hook on the notifier if it implements one.
+
+        Notifiers that don't care about container lifecycle (the stock
+        desktop :class:`DbusNotifier`, :class:`NullNotifier`) simply don't
+        expose the method; we no-op rather than error.  Consumers that do
+        care (``CallbackNotifier`` for the TUI) get the event.
+        """
+        hook = getattr(self._notifier, method, None)
+        if hook is None:
+            return
+        try:
+            hook(*args)
+        except Exception:
+            _log.exception("Notifier %s raised for args=%s", method, args)
 
     def _nid_for_clearance_request(self, request_id: str) -> int | None:
         """Reverse lookup for the clearance notification id."""

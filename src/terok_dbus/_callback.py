@@ -42,14 +42,24 @@ class CallbackNotifier:
         on_notify: Called for every ``notify()`` with a :class:`Notification`.
             Receives new notifications (``replaces_id == 0``) and in-place
             updates (``replaces_id > 0``, e.g. verdict results).
+        on_container_started: Called for every ``ContainerStarted`` signal
+            with the short container ID.  Optional — consumers that don't
+            care about container lifecycle skip the parameter.
+        on_container_exited: Called for every ``ContainerExited`` signal
+            with ``(container, reason)``.  Optional, same semantics.
     """
 
     def __init__(
         self,
         on_notify: Callable[[Notification], None] | None = None,
+        *,
+        on_container_started: Callable[[str], None] | None = None,
+        on_container_exited: Callable[[str, str], None] | None = None,
     ) -> None:
-        """Bind optional notify callback."""
+        """Bind optional notify and lifecycle callbacks."""
         self._on_notify = on_notify
+        self._on_container_started = on_container_started
+        self._on_container_exited = on_container_exited
         self._next_id = 1
         self._callbacks: dict[int, Callable[[str], None]] = {}
 
@@ -108,3 +118,13 @@ class CallbackNotifier:
         """
         if cb := self._callbacks.pop(notification_id, None):
             cb(action_key)
+
+    def on_container_started(self, container: str) -> None:
+        """Forward a ``ContainerStarted`` lifecycle event to the consumer hook."""
+        if self._on_container_started:
+            self._on_container_started(container)
+
+    def on_container_exited(self, container: str, reason: str) -> None:
+        """Forward a ``ContainerExited`` lifecycle event to the consumer hook."""
+        if self._on_container_exited:
+            self._on_container_exited(container, reason)

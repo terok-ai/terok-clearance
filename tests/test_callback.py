@@ -81,6 +81,26 @@ class TestCallbackNotifier:
         await notifier.disconnect()
         assert len(notifier._callbacks) == 0
 
+    def test_on_container_started_forwards_to_hook(self) -> None:
+        """Lifecycle hook is invoked with the container id when bound."""
+        hook = Mock()
+        notifier = CallbackNotifier(on_container_started=hook)
+        notifier.on_container_started("abc123")
+        hook.assert_called_once_with("abc123")
+
+    def test_on_container_exited_forwards_to_hook(self) -> None:
+        """Lifecycle hook is invoked with (container, reason) when bound."""
+        hook = Mock()
+        notifier = CallbackNotifier(on_container_exited=hook)
+        notifier.on_container_exited("abc123", "poststop")
+        hook.assert_called_once_with("abc123", "poststop")
+
+    def test_lifecycle_without_hook_is_noop(self) -> None:
+        """No-hook is fine — the methods exist so the subscriber can probe them."""
+        notifier = CallbackNotifier()
+        notifier.on_container_started("abc123")  # must not raise
+        notifier.on_container_exited("abc123", "poststop")  # must not raise
+
 
 class TestNotification:
     """Tests for the Notification dataclass."""

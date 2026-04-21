@@ -142,9 +142,12 @@ class TestShieldSignals:
         assert _REQUEST_ID not in sub._pending
 
     @pytest.mark.asyncio
-    async def test_container_started_signal_is_logged_no_op(self, mock_notifier: AsyncMock) -> None:
+    async def test_container_started_forwards_to_notifier_when_hooked(self) -> None:
+        """Subscriber calls ``on_container_started`` when the notifier exposes it."""
+        notifier = AsyncMock()
+        notifier.on_container_started = MagicMock()
         bus = _mock_bus()
-        sub = EventSubscriber(mock_notifier, bus=bus)
+        sub = EventSubscriber(notifier, bus=bus)
         sub._shield_owner = ":1.77"
         started = Message(
             message_type=MessageType.SIGNAL,
@@ -156,7 +159,51 @@ class TestShieldSignals:
         )
         sub._on_message(started)
         await asyncio.sleep(0)
-        mock_notifier.notify.assert_not_called()
+        notifier.on_container_started.assert_called_once_with(CONTAINER)
+        notifier.notify.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_container_started_signal_is_noop_when_hook_absent(self) -> None:
+        """Notifiers without the hook (Dbus / Null) silently ignore the signal."""
+        # ``spec_set`` limits attribute lookups to the listed names, matching
+        # the Notifier protocol surface — no auto-generated attrs for the
+        # optional lifecycle hooks the subscriber probes for.
+        notifier = AsyncMock(spec_set=["notify", "on_action", "close", "disconnect"])
+        notifier.notify.return_value = 42
+        bus = _mock_bus()
+        sub = EventSubscriber(notifier, bus=bus)
+        sub._shield_owner = ":1.77"
+        started = Message(
+            message_type=MessageType.SIGNAL,
+            sender=":1.77",
+            path=SHIELD_OBJECT_PATH,
+            interface=SHIELD_INTERFACE_NAME,
+            member="ContainerStarted",
+            body=[CONTAINER],
+        )
+        sub._on_message(started)
+        await asyncio.sleep(0)
+        notifier.notify.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_container_exited_forwards_to_notifier_when_hooked(self) -> None:
+        """Subscriber calls ``on_container_exited`` with (container, reason)."""
+        notifier = AsyncMock()
+        notifier.on_container_exited = MagicMock()
+        bus = _mock_bus()
+        sub = EventSubscriber(notifier, bus=bus)
+        sub._shield_owner = ":1.77"
+        exited = Message(
+            message_type=MessageType.SIGNAL,
+            sender=":1.77",
+            path=SHIELD_OBJECT_PATH,
+            interface=SHIELD_INTERFACE_NAME,
+            member="ContainerExited",
+            body=[CONTAINER, "poststop"],
+        )
+        sub._on_message(exited)
+        await asyncio.sleep(0)
+        notifier.on_container_exited.assert_called_once_with(CONTAINER, "poststop")
 
     @pytest.mark.asyncio
     async def test_non_signal_messages_are_ignored(self, mock_notifier: AsyncMock) -> None:
