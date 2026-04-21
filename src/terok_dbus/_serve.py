@@ -156,7 +156,11 @@ def _make_event_sink(hub: "ShieldHub") -> "Callable[[dict], Awaitable[None]]":
     so one missing field won't kill the relay.
     """
 
-    async def sink(event: dict) -> None:
+    async def sink(event: dict) -> None:  # NOSONAR(python:S7503)
+        # ``async`` is structural — EventIngester.on_event expects
+        # ``Callable[[dict], Awaitable[None]]``, and dbus-fast's
+        # ``ServiceInterface`` signal methods are synchronous.  Nothing to
+        # ``await``; the shape is imposed by the ingester contract.
         kind = event.get("type")
         if kind == "pending":
             hub.ConnectionBlocked(

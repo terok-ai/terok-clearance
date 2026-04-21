@@ -91,9 +91,14 @@ class EventIngester:
         # waited first we'd deadlock against our own accepted tasks.
         if self._server is not None:
             self._server.close()
-        for task in list(self._clients):
+        # Snapshot once: each ``await task`` below yields to the event loop
+        # which resumes the handler's ``finally`` and discards itself from
+        # ``self._clients``.  Iterating the live set while that happens would
+        # raise ``RuntimeError: Set changed size during iteration``.
+        pending = tuple(self._clients)
+        for task in pending:
             task.cancel()
-        for task in list(self._clients):
+        for task in pending:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
         if self._server is not None:
