@@ -541,8 +541,26 @@ class EventSubscriber:
         OOM leaves ``ContainerExited`` as the only signal — without a
         purge the pending records and on-screen popups would leak until
         the subscriber restarts.  Idempotent alongside ``_handle_shield_down``.
+
+        Also dismisses any tracked ``ShieldDown`` popup for this container:
+        the container is gone, so a persistent "Shield down: X" notification
+        is misleading on screen and the stale ``notification_id`` would
+        otherwise be reused by ``replaces_id`` on a future container with
+        the same label.  This lives here rather than in ``_purge_container``
+        because ``_handle_shield_down`` also funnels through the purge,
+        concurrently with ``_notify_shield_down`` — closing the popup there
+        would race the one we're about to post.
         """
         await self._purge_container(container)
+        if (down_nid := self._shield_down_notifs.pop(container, None)) is not None:
+            try:
+                await self._notifier.close(down_nid)
+            except Exception:
+                _log.exception(
+                    "Failed to close stale ShieldDown notification %d for %s",
+                    down_nid,
+                    container,
+                )
 
     async def _purge_container(self, container: str) -> None:
         """Drop every pending block for *container* and close its popups."""

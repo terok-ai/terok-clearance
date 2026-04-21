@@ -645,6 +645,37 @@ class TestLiveBlockDedup:
 
         notifier.close.assert_awaited_once_with(42)
         assert f"{CONTAINER}:1" not in sub._pending
+
+    @pytest.mark.asyncio
+    async def test_container_exited_closes_tracked_shield_down_popup(self) -> None:
+        """A dying container drops its ``_shield_down_notifs`` entry too.
+
+        The "Shield down: X" popup is persistent; leaving it alive after
+        the container is gone would mislead the operator and set up a
+        stale ``replaces_id`` reuse for a future same-named container.
+        """
+        notifier = AsyncMock()
+        notifier.notify.return_value = 42
+        notifier.close = AsyncMock()
+        notifier.on_container_exited = MagicMock()
+        sub, _ = _seed_subscriber(notifier)
+        sub._shield_down_notifs[CONTAINER] = 77
+
+        exited = Message(
+            message_type=MessageType.SIGNAL,
+            sender=_HUB_UNIQUE,
+            path=SHIELD_OBJECT_PATH,
+            interface=SHIELD_INTERFACE_NAME,
+            member="ContainerExited",
+            body=[CONTAINER, "poststop"],
+        )
+        sub._on_message(exited)
+        for _ in range(3):
+            await asyncio.sleep(0)
+
+        close_ids = {call.args[0] for call in notifier.close.await_args_list}
+        assert 77 in close_ids
+        assert CONTAINER not in sub._shield_down_notifs
         notifier.on_container_exited.assert_called_once_with(CONTAINER, "poststop")
 
 
