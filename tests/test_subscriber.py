@@ -20,7 +20,12 @@ from terok_dbus._interfaces import (
     SHIELD_INTERFACE_NAME,
     SHIELD_OBJECT_PATH,
 )
-from terok_dbus._subscriber import EventSubscriber
+from terok_dbus._subscriber import (
+    _HINT_CONFIRMATION,
+    _HINT_LIFECYCLE,
+    _HINT_SECURITY_ALERT,
+    EventSubscriber,
+)
 from tests.conftest import CONTAINER, DEST_IP, DOMAIN
 
 _HUB_UNIQUE = ":1.77"
@@ -174,6 +179,8 @@ class TestShieldSignals:
         assert mock_notifier.notify.await_count == 2
         second_call = mock_notifier.notify.await_args_list[1]
         assert second_call.kwargs.get("replaces_id") == 42
+        assert second_call.kwargs["hints"] is _HINT_CONFIRMATION
+        assert second_call.kwargs["timeout_ms"] == -1
         assert _REQUEST_ID not in sub._pending
 
     @pytest.mark.asyncio
@@ -198,7 +205,10 @@ class TestShieldSignals:
             await asyncio.sleep(0)
         notifier.on_container_started.assert_called_once_with(CONTAINER)
         notifier.notify.assert_awaited_once()
-        assert notifier.notify.await_args.args[0].startswith("Container started:")
+        call = notifier.notify.await_args
+        assert call.args[0].startswith("Container started:")
+        assert call.kwargs["hints"] is _HINT_LIFECYCLE
+        assert call.kwargs["timeout_ms"] == -1
 
     @pytest.mark.asyncio
     async def test_container_exited_fires_lifecycle_notification(self) -> None:
@@ -222,9 +232,13 @@ class TestShieldSignals:
             await asyncio.sleep(0)
         notifier.on_container_exited.assert_called_once_with(CONTAINER, "poststop")
         # notify fires for the lifecycle popup (the purge path only calls close()).
-        notify_titles = [call.args[0] for call in notifier.notify.await_args_list]
-        assert any(title.startswith("Container stopped:") for title in notify_titles)
-        assert any("poststop" in call.args[1] for call in notifier.notify.await_args_list)
+        lifecycle_calls = [
+            c for c in notifier.notify.await_args_list if c.args[0].startswith("Container stopped:")
+        ]
+        assert len(lifecycle_calls) == 1
+        assert "poststop" in lifecycle_calls[0].args[1]
+        assert lifecycle_calls[0].kwargs["hints"] is _HINT_LIFECYCLE
+        assert lifecycle_calls[0].kwargs["timeout_ms"] == -1
 
     @pytest.mark.asyncio
     async def test_non_signal_messages_are_ignored(self, mock_notifier: AsyncMock) -> None:
@@ -378,8 +392,12 @@ class TestShieldSignals:
         sub._on_message(msg)
         for _ in range(4):
             await asyncio.sleep(0)
-        notify_titles = [call.args[0] for call in notifier.notify.await_args_list]
-        assert any(title.startswith(expected_title) for title in notify_titles)
+        alert_calls = [
+            c for c in notifier.notify.await_args_list if c.args[0].startswith(expected_title)
+        ]
+        assert len(alert_calls) == 1
+        assert alert_calls[0].kwargs["hints"] is _HINT_SECURITY_ALERT
+        assert alert_calls[0].kwargs["timeout_ms"] == -1
         assert sub._shield_down_notifs[CONTAINER] == 101
 
     @pytest.mark.asyncio
@@ -407,7 +425,10 @@ class TestShieldSignals:
         notifier.close.assert_awaited_once_with(55)
         assert CONTAINER not in sub._shield_down_notifs
         notifier.notify.assert_awaited_once()
-        assert notifier.notify.await_args.args[0].startswith("Shield up:")
+        call = notifier.notify.await_args
+        assert call.args[0].startswith("Shield up:")
+        assert call.kwargs["hints"] is _HINT_LIFECYCLE
+        assert call.kwargs["timeout_ms"] == -1
 
 
 # ── Verdict routing ───────────────────────────────────────────────────
