@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -120,13 +120,28 @@ class EventSubscriber:
         bus: Optional pre-connected ``MessageBus`` (for testing).  ``None``
             means we create and own a new session-bus connection on
             :meth:`start`.
+        name_resolver: Optional callable that maps a short container ID to
+            a human-readable container name.  When provided, the subscriber
+            uses the name in the notification body and passes both values
+            to ``notify()`` so rich consumers (TUI) can render ``name (id)``.
+            When ``None``, the ID is used in the body and ``container_name``
+            is forwarded as empty.  The resolver is called on every
+            ``ConnectionBlocked`` — callers that need caching should wrap
+            it themselves (e.g. :class:`PodmanContainerNameResolver`).
     """
 
-    def __init__(self, notifier: Notifier, bus: MessageBus | None = None) -> None:
-        """Initialise the subscriber with a notifier and optional bus."""
+    def __init__(
+        self,
+        notifier: Notifier,
+        bus: MessageBus | None = None,
+        *,
+        name_resolver: Callable[[str], str] | None = None,
+    ) -> None:
+        """Initialise the subscriber with a notifier and optional bus + resolver."""
         self._notifier = notifier
         self._bus = bus
         self._owns_bus = bus is None
+        self._name_resolver = name_resolver
         # request_id → pending block awaiting verdict + its notification.
         self._pending: dict[str, _PendingBlock] = {}
         # notification_id → request_id — used by the Clearance1 legacy path.
@@ -335,13 +350,22 @@ class EventSubscriber:
         """Create a desktop notification for a blocked connection."""
         display = domain if domain else dest
         proto_name = _PROTO_NAMES.get(proto, str(proto))
+        # Resolve name via injection when available; fall back to the raw ID.
+        # ``body`` prefers the user-facing name so the desktop popup reads
+        # "Container: my-task" rather than "Container: fa0905d97a1c".  The
+        # untouched ID still flows through the ``container_id`` kwarg for
+        # TUI consumers that want both, and is what we track internally
+        # for verdict-routing on the bus.
+        name = self._name_resolver(container) if self._name_resolver else ""
         _log.info("Blocked: %s:%d/%s (%s) [%s]", display, port, proto_name, container, request_id)
         nid = await self._notifier.notify(
             f"Blocked: {display}:{port}",
-            f"Container: {container}\nProtocol: {proto_name}",
+            f"Container: {name or container}\nProtocol: {proto_name}",
             actions=[("allow", "Allow"), ("deny", "Deny")],
             hints=_HINT_CRITICAL,
             timeout_ms=0,
+            container_id=container,
+            container_name=name,
         )
         self._pending[request_id] = _PendingBlock(
             notification_id=nid, container=container, request_id=request_id, dest=dest
@@ -374,12 +398,15 @@ class EventSubscriber:
         else:
             title = f"{failure_titles.get(action, action.title() + ' failed')}: {pending.dest}"
             hints = _HINT_VERDICT_FAILED
+        name = self._name_resolver(container) if self._name_resolver else ""
         await self._notifier.notify(
             title,
-            f"Container: {container}",
+            f"Container: {name or container}",
             replaces_id=pending.notification_id,
             hints=hints,
             timeout_ms=5000,
+            container_id=container,
+            container_name=name,
         )
 
     async def _send_verdict(self, container: str, request_id: str, dest: str, action: str) -> None:

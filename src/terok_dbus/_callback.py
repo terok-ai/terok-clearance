@@ -25,7 +25,15 @@ from typing import Any
 
 @dataclass
 class Notification:
-    """Snapshot of a single notification posted by the subscriber."""
+    """Snapshot of a single notification posted by the subscriber.
+
+    ``container_id`` and ``container_name`` are presentation-layer
+    context propagated through the ``Notifier.notify`` kwargs of the
+    same name — empty when the subscriber didn't resolve them (e.g. no
+    ``name_resolver`` injected).  The desktop :class:`DbusNotifier`
+    discards both; the TUI uses them to render ``name (id)`` while
+    still showing the IDs in the scrolling log.
+    """
 
     nid: int
     summary: str
@@ -33,6 +41,8 @@ class Notification:
     actions: list[tuple[str, str]]
     replaces_id: int
     timeout_ms: int
+    container_id: str = ""
+    container_name: str = ""
 
 
 class CallbackNotifier:
@@ -73,6 +83,8 @@ class CallbackNotifier:
         hints: Mapping[str, Any] | None = None,
         replaces_id: int = 0,
         app_icon: str = "",
+        container_id: str = "",
+        container_name: str = "",
     ) -> int:
         """Record the notification and invoke the ``on_notify`` hook.
 
@@ -88,6 +100,8 @@ class CallbackNotifier:
             actions=list(actions),
             replaces_id=replaces_id,
             timeout_ms=timeout_ms,
+            container_id=container_id,
+            container_name=container_name,
         )
         if self._on_notify:
             self._on_notify(notification)

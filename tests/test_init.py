@@ -20,6 +20,7 @@ class TestPublicApi:
             "Notification",
             "NullNotifier",
             "Notifier",
+            "PodmanContainerNameResolver",
             "create_notifier",
             "CLEARANCE_BUS_NAME",
             "CLEARANCE_INTERFACE_NAME",
