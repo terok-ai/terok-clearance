@@ -89,8 +89,12 @@ RestartSec=5
 # split: keep the hub minimal and its subprocess tree free of podman,
 # push the `terok-shield allow|deny` exec into a second user service
 # whose unit file can freely layer seccomp + mountns guards because
-# *it* doesn't exec podman.  Tracked separately; don't attempt partial
-# hardening here.
+# *it* doesn't exec podman.  Don't attempt partial hardening here;
+# tracked follow-up:
+#
+#   • Hub/verdict-helper split .... terok-ai/terok-dbus#48
+#   • Vault / gate hardening ...... terok-ai/terok-sandbox#188
+#     (independent of the split — gates the hub's hardening only)
 
 [Install]
 WantedBy=default.target
