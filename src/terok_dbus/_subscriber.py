@@ -398,14 +398,26 @@ class EventSubscriber:
         else:
             title = f"{failure_titles.get(action, action.title() + ' failed')}: {pending.dest}"
             hints = _HINT_VERDICT_FAILED
-        name = await self._resolve_container_name(container)
+        # ``pending.container`` is the ground truth for this notification
+        # thread — captured when ConnectionBlocked landed.  Treat the
+        # signal's own ``container`` as advisory: it should match, but if
+        # the hub ever miswires one we'd rather log the drift than render
+        # one notification with two different container labels.
+        if container != pending.container:
+            _log.warning(
+                "VerdictApplied container mismatch for %s: signal=%s pending=%s",
+                request_id,
+                container,
+                pending.container,
+            )
+        name = await self._resolve_container_name(pending.container)
         await self._notifier.notify(
             title,
-            f"Container: {name or container}",
+            f"Container: {name or pending.container}",
             replaces_id=pending.notification_id,
             hints=hints,
             timeout_ms=5000,
-            container_id=container,
+            container_id=pending.container,
             container_name=name,
         )
 
