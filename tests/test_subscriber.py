@@ -142,9 +142,10 @@ class TestShieldSignals:
         assert _REQUEST_ID not in sub._pending
 
     @pytest.mark.asyncio
-    async def test_container_started_forwards_to_notifier_when_hooked(self) -> None:
-        """Subscriber calls ``on_container_started`` when the notifier exposes it."""
+    async def test_container_started_fires_lifecycle_notification(self) -> None:
+        """ContainerStarted produces a low-urgency transient notification + hook call."""
         notifier = AsyncMock()
+        notifier.notify = AsyncMock(return_value=42)
         notifier.on_container_started = MagicMock()
         bus = _mock_bus()
         sub = EventSubscriber(notifier, bus=bus)
@@ -158,37 +159,17 @@ class TestShieldSignals:
             body=[CONTAINER],
         )
         sub._on_message(started)
-        await asyncio.sleep(0)
+        for _ in range(3):
+            await asyncio.sleep(0)
         notifier.on_container_started.assert_called_once_with(CONTAINER)
-        notifier.notify.assert_not_called()
+        notifier.notify.assert_awaited_once()
+        assert notifier.notify.await_args.args[0].startswith("Container started:")
 
     @pytest.mark.asyncio
-    async def test_container_started_signal_is_noop_when_hook_absent(self) -> None:
-        """Notifiers without the hook (Dbus / Null) silently ignore the signal."""
-        # ``spec_set`` limits attribute lookups to the listed names, matching
-        # the Notifier protocol surface — no auto-generated attrs for the
-        # optional lifecycle hooks the subscriber probes for.
-        notifier = AsyncMock(spec_set=["notify", "on_action", "close", "disconnect"])
-        notifier.notify.return_value = 42
-        bus = _mock_bus()
-        sub = EventSubscriber(notifier, bus=bus)
-        sub._shield_owner = ":1.77"
-        started = Message(
-            message_type=MessageType.SIGNAL,
-            sender=":1.77",
-            path=SHIELD_OBJECT_PATH,
-            interface=SHIELD_INTERFACE_NAME,
-            member="ContainerStarted",
-            body=[CONTAINER],
-        )
-        sub._on_message(started)
-        await asyncio.sleep(0)
-        notifier.notify.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_container_exited_forwards_to_notifier_when_hooked(self) -> None:
-        """Subscriber calls ``on_container_exited`` with (container, reason)."""
+    async def test_container_exited_fires_lifecycle_notification(self) -> None:
+        """ContainerExited produces a low-urgency transient notification with the reason."""
         notifier = AsyncMock()
+        notifier.notify = AsyncMock(return_value=42)
         notifier.on_container_exited = MagicMock()
         bus = _mock_bus()
         sub = EventSubscriber(notifier, bus=bus)
@@ -202,8 +183,13 @@ class TestShieldSignals:
             body=[CONTAINER, "poststop"],
         )
         sub._on_message(exited)
-        await asyncio.sleep(0)
+        for _ in range(3):
+            await asyncio.sleep(0)
         notifier.on_container_exited.assert_called_once_with(CONTAINER, "poststop")
+        notifier.notify.assert_awaited_once()
+        args, kwargs = notifier.notify.await_args
+        assert args[0].startswith("Container stopped:")
+        assert "poststop" in args[1]
 
     @pytest.mark.asyncio
     async def test_non_signal_messages_are_ignored(self, mock_notifier: AsyncMock) -> None:
@@ -262,10 +248,18 @@ class TestShieldSignals:
         from terok_dbus._subscriber import _PendingBlock
 
         sub._pending[_REQUEST_ID] = _PendingBlock(
-            notification_id=42, container=CONTAINER, request_id=_REQUEST_ID, dest=DEST_IP
+            notification_id=42,
+            container=CONTAINER,
+            request_id=_REQUEST_ID,
+            dest=DEST_IP,
+            dedup_key=(CONTAINER, DEST_IP),
         )
         sub._pending["other:1"] = _PendingBlock(
-            notification_id=43, container="other", request_id="other:1", dest=DEST_IP
+            notification_id=43,
+            container="other",
+            request_id="other:1",
+            dest=DEST_IP,
+            dedup_key=("other", DEST_IP),
         )
         msg = Message(
             message_type=MessageType.SIGNAL,
@@ -296,6 +290,101 @@ class TestShieldSignals:
         await asyncio.sleep(0)
         mock_notifier.notify.assert_not_called()
         assert sub._pending == {}
+
+    @pytest.mark.asyncio
+    async def test_second_block_same_key_coalesces_with_counter(
+        self, mock_notifier: AsyncMock
+    ) -> None:
+        """A repeat ConnectionBlocked updates the live notification in place."""
+        bus = _mock_bus()
+        sub = EventSubscriber(mock_notifier, bus=bus)
+        sub._bus = bus
+        sub._shield_owner = _HUB_UNIQUE
+        sub._on_message(_connection_blocked_signal(request_id=f"{CONTAINER}:1"))
+        await asyncio.sleep(0)
+        sub._on_message(_connection_blocked_signal(request_id=f"{CONTAINER}:2"))
+        await asyncio.sleep(0)
+        assert mock_notifier.notify.await_count == 2
+        second_call = mock_notifier.notify.await_args_list[1]
+        assert second_call.kwargs.get("replaces_id") == 42
+        assert "Blocked 2 times" in second_call.args[1]
+        # Only one _pending entry — subsequent request_ids are dropped.
+        assert len(sub._pending) == 1
+
+    @pytest.mark.asyncio
+    async def test_verdict_applied_clears_dedup_entry(self, mock_notifier: AsyncMock) -> None:
+        """Once the verdict lands, the dedup map releases the (container, dest) slot."""
+        bus = _mock_bus()
+        sub = EventSubscriber(mock_notifier, bus=bus)
+        sub._bus = bus
+        sub._shield_owner = _HUB_UNIQUE
+        sub._on_message(_connection_blocked_signal())
+        await asyncio.sleep(0)
+        assert len(sub._live_dedup) == 1
+        sub._on_message(_verdict_applied_signal(action="allow", ok=True))
+        await asyncio.sleep(0)
+        assert sub._live_dedup == {}
+
+    @pytest.mark.parametrize(
+        ("member", "expected_title"),
+        [
+            ("ShieldDown", "Shield down:"),
+            ("ShieldDownAll", "Shield full bypass:"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_shield_down_posts_security_alert(self, member: str, expected_title: str) -> None:
+        """Manual shield drop fires a persistent critical notification."""
+        notifier = AsyncMock()
+        notifier.notify = AsyncMock(return_value=101)
+        notifier.close = AsyncMock()
+        notifier.on_shield_down = MagicMock()
+        notifier.on_shield_down_all = MagicMock()
+        bus = _mock_bus()
+        sub = EventSubscriber(notifier, bus=bus)
+        sub._shield_owner = _HUB_UNIQUE
+        msg = Message(
+            message_type=MessageType.SIGNAL,
+            sender=_HUB_UNIQUE,
+            path=SHIELD_OBJECT_PATH,
+            interface=SHIELD_INTERFACE_NAME,
+            member=member,
+            body=[CONTAINER],
+        )
+        sub._on_message(msg)
+        for _ in range(4):
+            await asyncio.sleep(0)
+        # One notify for the security alert; close never fires (no pending blocks seeded).
+        notify_titles = [call.args[0] for call in notifier.notify.await_args_list]
+        assert any(title.startswith(expected_title) for title in notify_titles)
+        assert sub._shield_down_notifs[CONTAINER] == 101
+
+    @pytest.mark.asyncio
+    async def test_shield_up_closes_matching_shield_down(self) -> None:
+        """ShieldUp closes the tracked ShieldDown notification before confirming."""
+        notifier = AsyncMock()
+        notifier.notify = AsyncMock(return_value=202)
+        notifier.close = AsyncMock()
+        notifier.on_shield_up = MagicMock()
+        bus = _mock_bus()
+        sub = EventSubscriber(notifier, bus=bus)
+        sub._shield_owner = _HUB_UNIQUE
+        sub._shield_down_notifs[CONTAINER] = 55
+        msg = Message(
+            message_type=MessageType.SIGNAL,
+            sender=_HUB_UNIQUE,
+            path=SHIELD_OBJECT_PATH,
+            interface=SHIELD_INTERFACE_NAME,
+            member="ShieldUp",
+            body=[CONTAINER],
+        )
+        sub._on_message(msg)
+        for _ in range(3):
+            await asyncio.sleep(0)
+        notifier.close.assert_awaited_once_with(55)
+        assert CONTAINER not in sub._shield_down_notifs
+        notifier.notify.assert_awaited_once()
+        assert notifier.notify.await_args.args[0].startswith("Shield up:")
 
     @pytest.mark.asyncio
     async def test_shield_signal_dropped_when_owner_unknown(self, mock_notifier: AsyncMock) -> None:

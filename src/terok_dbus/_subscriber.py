@@ -36,25 +36,62 @@ if TYPE_CHECKING:
 
 _log = logging.getLogger(__name__)
 
-_HINT_CRITICAL: dict[str, Any] = {
+# ── Notification urgency buckets ──────────────────────────────────────
+#
+# We lean on server-default timeouts (``timeout_ms=-1``) wherever
+# possible and let the urgency hint drive the lifecycle: GNOME never
+# auto-expires ``urgency=2`` (critical), fires normal/low through short
+# default timeouts, and respects the ``transient`` hint to keep
+# low-value confirmations out of the message tray.  ``resident`` keeps
+# an actionable notification visible after the user clicks Allow/Deny
+# so VerdictApplied lands on something still on screen.
+
+_HINT_BLOCK_PENDING: dict[str, Any] = {
     "urgency": Variant("y", 2),
     "resident": Variant("b", True),
 }
-"""Hints for pending-decision notifications: critical urgency, stay after action click."""
+"""Pending-decision (ConnectionBlocked) — critical + resident."""
 
-_HINT_RESOLVED: dict[str, Any] = {
-    "urgency": Variant("y", 1),
-}
-"""Hints for resolved notifications: normal urgency."""
-
-_HINT_VERDICT_FAILED: dict[str, Any] = {
+_HINT_SECURITY_ALERT: dict[str, Any] = {
     "urgency": Variant("y", 2),
 }
-"""Hints for verdict-application failures: critical urgency so the operator
-doesn't scroll past a 'nothing actually happened' notification with the
-same styling as a successful apply."""
+"""Shield-down / verdict-failed — critical, no resident."""
+
+_HINT_CONFIRMATION: dict[str, Any] = {
+    "urgency": Variant("y", 1),
+    "transient": Variant("b", True),
+}
+"""Verdict-ok confirmations — normal + transient (brief, no tray clutter)."""
+
+_HINT_LIFECYCLE: dict[str, Any] = {
+    "urgency": Variant("y", 0),
+    "transient": Variant("b", True),
+}
+"""ContainerStarted / ContainerExited / ShieldUp — low + transient."""
 
 _PROTO_NAMES: dict[int, str] = {6: "TCP", 17: "UDP"}
+
+
+def _wallclock_hhmmss() -> str:
+    """Return the current local time as ``HH:MM:SS`` for human-facing bodies."""
+    from datetime import datetime
+
+    return datetime.now().strftime("%H:%M:%S")  # noqa: DTZ005 — display-only
+
+
+def _blocked_body(container_label: str, proto_name: str, count: int, first_seen: str) -> str:
+    """Render the body for a ConnectionBlocked notification.
+
+    For the first block the body is two lines; on every subsequent hit
+    a third line carries the counter and the wall-clock time of the
+    first block so the operator can see at a glance "how often, for how
+    long" without opening an expanded view.
+    """
+    lines = [f"Container: {container_label}", f"Protocol: {proto_name}"]
+    if count > 1:
+        lines.append(f"Blocked {count} times since {first_seen}")
+    return "\n".join(lines)
+
 
 # ── D-Bus daemon constants ────────────────────────────────────────────
 
@@ -65,12 +102,38 @@ _DBUS_IFACE = "org.freedesktop.DBus"
 
 @dataclass
 class _PendingBlock:
-    """One outstanding blocked-connection event awaiting an operator verdict."""
+    """One outstanding blocked-connection event awaiting an operator verdict.
+
+    ``dedup_key`` is the ``(container, domain_or_dest)`` tuple under which
+    this block's live notification is indexed in :attr:`EventSubscriber._live_dedup`.
+    Stashing it here lets ``_handle_verdict_applied`` drop the dedup
+    entry in O(1) without re-deriving the key from half-remembered signal
+    fields.
+    """
 
     notification_id: int
     container: str
     request_id: str
     dest: str
+    dedup_key: tuple[str, str]
+
+
+@dataclass
+class _LiveBlock:
+    """A currently-visible block notification that may coalesce repeats.
+
+    When a second ``ConnectionBlocked`` arrives for the same
+    ``(container, domain_or_dest)`` while the first prompt is still on
+    screen, we update the one notification in place and bump ``count``
+    rather than stack a second copy.  ``first_seen`` is the wall-clock
+    time of the original block so the body can read
+    "Blocked N times since HH:MM:SS" — the one shape an operator can
+    parse without mental arithmetic.
+    """
+
+    notification_id: int
+    count: int
+    first_seen: str
 
 
 # ── Match-rule helpers ────────────────────────────────────────────────
@@ -144,6 +207,14 @@ class EventSubscriber:
         self._name_resolver = name_resolver
         # request_id → pending block awaiting verdict + its notification.
         self._pending: dict[str, _PendingBlock] = {}
+        # (container, domain_or_dest) → live notification awaiting a verdict.
+        # Subsequent ConnectionBlocked signals with the same key update the
+        # existing notification with a counter instead of stacking copies.
+        self._live_dedup: dict[tuple[str, str], _LiveBlock] = {}
+        # container → notification_id of the active ShieldDown notification,
+        # so ShieldUp can close the matching one (user instruction: a stale
+        # "Shield DOWN" popup is a security hazard the moment shield is back).
+        self._shield_down_notifs: dict[str, int] = {}
         # notification_id → request_id — used by the Clearance1 legacy path.
         self._clearance_pending: dict[int, str] = {}
         # For Clearance1: legacy per-sender routing (unchanged).
@@ -249,6 +320,8 @@ class EventSubscriber:
 
         self._match_rules.clear()
         self._pending.clear()
+        self._live_dedup.clear()
+        self._shield_down_notifs.clear()
         self._clearance_pending.clear()
         self._clearance_senders.clear()
         self._shield_owner = None
@@ -310,20 +383,24 @@ class EventSubscriber:
         elif msg.member == "ContainerStarted" and len(msg.body) == 1:
             (container,) = msg.body
             _log.info("Container started: %s", container)
+            self._dispatch(self._notify_container_started(container))
             self._dispatch_lifecycle("on_container_started", container)
         elif msg.member == "ContainerExited" and len(msg.body) == 2:
             container, reason = msg.body
             _log.info("Container exited: %s (reason=%s)", container, reason)
+            self._dispatch(self._notify_container_exited(container, reason))
             self._dispatch_lifecycle("on_container_exited", container, reason)
         elif msg.member == "ShieldUp" and len(msg.body) == 1:
             (container,) = msg.body
             _log.info("Shield up: %s", container)
+            self._dispatch(self._notify_shield_up(container))
             self._dispatch_lifecycle("on_shield_up", container)
         elif msg.member in {"ShieldDown", "ShieldDownAll"} and len(msg.body) == 1:
             (container,) = msg.body
             allow_all = msg.member == "ShieldDownAll"
             _log.info("Shield down: %s (allow_all=%s)", container, allow_all)
             self._dispatch(self._handle_shield_down(container))
+            self._dispatch(self._notify_shield_down(container, allow_all=allow_all))
             self._dispatch_lifecycle(
                 "on_shield_down_all" if allow_all else "on_shield_down", container
             )
@@ -359,9 +436,18 @@ class EventSubscriber:
         proto: int,
         domain: str,
     ) -> None:
-        """Create a desktop notification for a blocked connection."""
+        """Create or coalesce a desktop notification for a blocked connection.
+
+        If a live notification already exists for this
+        ``(container, domain_or_dest)`` pair — i.e. the operator hasn't
+        decided yet and the kernel has blocked another packet to the same
+        destination — update the existing notification in place with an
+        incremented counter.  Otherwise create a fresh notification and
+        remember it for future coalescing.
+        """
         display = domain if domain else dest
         proto_name = _PROTO_NAMES.get(proto, str(proto))
+        dedup_key = (container, display)
         # Resolve name via injection when available; fall back to the raw ID.
         # ``body`` prefers the user-facing name so the desktop popup reads
         # "Container: my-task" rather than "Container: fa0905d97a1c".  The
@@ -370,17 +456,38 @@ class EventSubscriber:
         # for verdict-routing on the bus.
         name = await self._resolve_container_name(container)
         _log.info("Blocked: %s:%d/%s (%s) [%s]", display, port, proto_name, container, request_id)
+
+        if (live := self._live_dedup.get(dedup_key)) is not None:
+            live.count += 1
+            await self._notifier.notify(
+                f"Blocked: {display}:{port}",
+                _blocked_body(name or container, proto_name, live.count, live.first_seen),
+                replaces_id=live.notification_id,
+                hints=_HINT_BLOCK_PENDING,
+                timeout_ms=0,
+                container_id=container,
+                container_name=name,
+            )
+            return
+
         nid = await self._notifier.notify(
             f"Blocked: {display}:{port}",
-            f"Container: {name or container}\nProtocol: {proto_name}",
+            _blocked_body(name or container, proto_name, count=1, first_seen=""),
             actions=[("allow", "Allow"), ("deny", "Deny")],
-            hints=_HINT_CRITICAL,
+            hints=_HINT_BLOCK_PENDING,
             timeout_ms=0,
             container_id=container,
             container_name=name,
         )
         self._pending[request_id] = _PendingBlock(
-            notification_id=nid, container=container, request_id=request_id, dest=dest
+            notification_id=nid,
+            container=container,
+            request_id=request_id,
+            dest=dest,
+            dedup_key=dedup_key,
+        )
+        self._live_dedup[dedup_key] = _LiveBlock(
+            notification_id=nid, count=1, first_seen=_wallclock_hhmmss()
         )
         await self._notifier.on_action(
             nid,
@@ -402,14 +509,15 @@ class EventSubscriber:
         pending = self._pending.pop(request_id, None)
         if pending is None:
             return
+        self._live_dedup.pop(pending.dedup_key, None)
         success_titles = {"allow": "Allowed", "deny": "Denied"}
         failure_titles = {"allow": "Allow failed", "deny": "Deny failed"}
         if ok:
             title = f"{success_titles.get(action, action.title())}: {pending.dest}"
-            hints = _HINT_RESOLVED
+            hints = _HINT_CONFIRMATION
         else:
             title = f"{failure_titles.get(action, action.title() + ' failed')}: {pending.dest}"
-            hints = _HINT_VERDICT_FAILED
+            hints = _HINT_SECURITY_ALERT
         # ``pending.container`` is the ground truth for this notification
         # thread — captured when ConnectionBlocked landed.  Treat the
         # signal's own ``container`` as advisory: it should match, but if
@@ -428,7 +536,7 @@ class EventSubscriber:
             f"Container: {name or pending.container}",
             replaces_id=pending.notification_id,
             hints=hints,
-            timeout_ms=5000,
+            timeout_ms=-1,
             container_id=pending.container,
             container_name=name,
         )
@@ -439,14 +547,14 @@ class EventSubscriber:
         While shield is in bypass, any block we previously asked the operator
         to clear is stale: traffic is flowing already, so clicking Allow/Deny
         would write into an allowlist nobody is consulting right now.  We
-        drop the pending record and close the on-screen notification rather
-        than leaving a ghost button alive.  ``ShieldUp`` doesn't need a
-        companion — when shield comes back the next block triggers a fresh
-        ``ConnectionBlocked`` and the whole flow starts over.
+        drop the pending record, purge any live-dedup entries for the
+        container, and close the on-screen notification rather than leaving
+        a ghost button alive.
         """
         stale = [pending for pending in self._pending.values() if pending.container == container]
         for pending in stale:
             self._pending.pop(pending.request_id, None)
+            self._live_dedup.pop(pending.dedup_key, None)
             try:
                 await self._notifier.close(pending.notification_id)
             except Exception:
@@ -455,6 +563,86 @@ class EventSubscriber:
                     pending.notification_id,
                     container,
                 )
+
+    async def _notify_shield_down(self, container: str, *, allow_all: bool) -> None:
+        """Post a persistent security-alert notification for a manual shield drop.
+
+        Critical urgency (GNOME doesn't auto-expire those), no ``resident``
+        — the user just needs to see it.  Subsequent drops for the same
+        container update the existing notification in place via
+        ``replaces_id`` so we don't pile up stale popups if shield flips
+        a few times in a row.
+        """
+        name = await self._resolve_container_name(container)
+        label = name or container
+        if allow_all:
+            title = f"Shield full bypass: {label}"
+            body = "Outbound firewall fully disabled — every destination is reachable."
+        else:
+            title = f"Shield down: {label}"
+            body = "Outbound firewall bypassed — allowlist is not enforced."
+        replaces_id = self._shield_down_notifs.get(container, 0)
+        nid = await self._notifier.notify(
+            title,
+            body,
+            hints=_HINT_SECURITY_ALERT,
+            timeout_ms=-1,
+            replaces_id=replaces_id,
+            container_id=container,
+            container_name=name,
+        )
+        self._shield_down_notifs[container] = nid
+
+    async def _notify_shield_up(self, container: str) -> None:
+        """Close the stale ShieldDown popup (if any) and post a brief confirmation.
+
+        A ``ShieldDown`` notification is an active-state warning; once
+        shield is back it becomes misinformation.  Close the old popup
+        by its tracked ``notification_id`` before firing the brief
+        ``ShieldUp`` confirmation so the operator never sees both on
+        screen together.
+        """
+        if (down_nid := self._shield_down_notifs.pop(container, None)) is not None:
+            try:
+                await self._notifier.close(down_nid)
+            except Exception:
+                _log.exception("Failed to close stale ShieldDown notification %d", down_nid)
+        name = await self._resolve_container_name(container)
+        label = name or container
+        await self._notifier.notify(
+            f"Shield up: {label}",
+            "Outbound firewall restored.",
+            hints=_HINT_LIFECYCLE,
+            timeout_ms=-1,
+            container_id=container,
+            container_name=name,
+        )
+
+    async def _notify_container_started(self, container: str) -> None:
+        """Low-urgency, transient confirmation that a shielded container came online."""
+        name = await self._resolve_container_name(container)
+        label = name or container
+        await self._notifier.notify(
+            f"Container started: {label}",
+            "",
+            hints=_HINT_LIFECYCLE,
+            timeout_ms=-1,
+            container_id=container,
+            container_name=name,
+        )
+
+    async def _notify_container_exited(self, container: str, reason: str) -> None:
+        """Low-urgency, transient confirmation that a shielded container stopped."""
+        name = await self._resolve_container_name(container)
+        label = name or container
+        await self._notifier.notify(
+            f"Container stopped: {label}",
+            f"Reason: {reason}" if reason else "",
+            hints=_HINT_LIFECYCLE,
+            timeout_ms=-1,
+            container_id=container,
+            container_name=name,
+        )
 
     async def _send_verdict(self, container: str, request_id: str, dest: str, action: str) -> None:
         """Call ``Verdict`` on the hub (``org.terok.Shield1`` well-known name)."""
@@ -490,7 +678,7 @@ class EventSubscriber:
             f"Task {task} wants {dest}:{port}",
             f"Project: {project}\nReason: {reason}",
             actions=[("accept", "Allow"), ("deny", "Deny")],
-            hints=_HINT_CRITICAL,
+            hints=_HINT_BLOCK_PENDING,
             timeout_ms=0,
         )
         self._clearance_pending[nid] = request_id
@@ -509,8 +697,8 @@ class EventSubscriber:
             f"{status}: {request_id}",
             body,
             replaces_id=nid,
-            hints=_HINT_RESOLVED,
-            timeout_ms=5000,
+            hints=_HINT_CONFIRMATION,
+            timeout_ms=-1,
         )
         del self._clearance_pending[nid]
 
