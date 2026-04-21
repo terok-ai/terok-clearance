@@ -26,6 +26,8 @@ class Notifier(Protocol):
         hints: Mapping[str, Any] | None = None,
         replaces_id: int = 0,
         app_icon: str = "",
+        container_id: str = "",
+        container_name: str = "",
     ) -> int:
         """Send a desktop notification.
 
@@ -38,6 +40,13 @@ class Notifier(Protocol):
                 ``DbusNotifier``, ignored by ``NullNotifier``).
             replaces_id: Replace an existing notification in-place.
             app_icon: Icon name or ``file:///`` URI.
+            container_id: Optional 12-char podman container ID for
+                presentation-layer consumers (TUI).  The desktop
+                ``DbusNotifier`` ignores it; ``CallbackNotifier`` attaches it
+                to the :class:`~terok_dbus._callback.Notification` so rich
+                consumers can render it alongside the user-facing name.
+            container_name: Optional human-readable container name matching
+                the ID.  Same propagation rules as ``container_id``.
 
         Returns:
             Server-assigned notification ID (``0`` for null implementations).

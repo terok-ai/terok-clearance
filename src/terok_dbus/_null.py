@@ -23,6 +23,8 @@ class NullNotifier:
         hints: Mapping[str, Any] | None = None,
         replaces_id: int = 0,
         app_icon: str = "",
+        container_id: str = "",
+        container_name: str = "",
     ) -> int:
         """Accept and discard a notification, returning ``0``."""
         return 0

@@ -93,15 +93,20 @@ class TestDbusNotifierNotify:
     """Notification sending tests."""
 
     async def test_notify_passes_correct_args(self, mock_bus: MagicMock):
+        from terok_dbus._notifier import _DEFAULT_APP_ICON
+
         with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier("myapp")
             nid = await notifier.notify("Title", "Body", timeout_ms=5000)
             assert nid == 7
             iface = mock_bus.get_proxy_object.return_value.get_interface.return_value
+            # app_icon falls back to the packaged terok-logo.png when the
+            # caller doesn't pass an explicit icon — branding for every
+            # clearance notification without operator-side icon setup.
             iface.call_notify.assert_awaited_once_with(
                 "myapp",
                 0,
-                "",
+                _DEFAULT_APP_ICON,
                 "Title",
                 "Body",
                 [],
@@ -145,6 +150,24 @@ class TestDbusNotifierNotify:
             notifier = DbusNotifier()
             await asyncio.gather(notifier.notify("a"), notifier.notify("b"))
             mock_bus.connect.assert_awaited_once()
+
+    async def test_explicit_app_icon_wins_over_default(self, mock_bus: MagicMock):
+        """Callers supplying ``app_icon`` keep their choice; the logo is a fallback."""
+        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+            notifier = DbusNotifier()
+            await notifier.notify("Title", app_icon="dialog-warning")
+            iface = mock_bus.get_proxy_object.return_value.get_interface.return_value
+            assert iface.call_notify.call_args[0][2] == "dialog-warning"
+
+    async def test_default_icon_is_shipped_logo_file(self) -> None:
+        """The fallback icon resolves to a real on-disk ``terok-logo.png``."""
+        from pathlib import Path
+
+        from terok_dbus._notifier import _DEFAULT_APP_ICON, _LOGO_PATH
+
+        assert _LOGO_PATH.is_file(), f"packaged logo missing at {_LOGO_PATH}"
+        assert _DEFAULT_APP_ICON.startswith("file://")
+        assert Path(_DEFAULT_APP_ICON.removeprefix("file://")).is_file()
 
 
 class TestDbusNotifierActions:

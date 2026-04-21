@@ -6,11 +6,27 @@
 import asyncio
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from dbus_fast.aio import MessageBus
 
 from terok_dbus._constants import BUS_NAME, INTERFACE_NAME, OBJECT_PATH
+
+# ``Path(__file__)`` can be relative under editable installs or alternative
+# loaders; ``resolve()`` before ``as_uri()`` because the latter rejects
+# relative paths with a ValueError that would fire at import time and
+# prevent the module from loading at all.
+_LOGO_PATH = Path(__file__).resolve().parent / "resources" / "terok-logo.png"
+
+#: ``file://`` URI of the bundled terok logo.  Freedesktop daemons render a
+#: PNG passed as ``app_icon`` alongside summary + body; this gives every
+#: clearance notification a consistent brand mark without requiring the
+#: operator to install a system icon theme.  Empty when the resource is
+#: missing (editable installs that skipped package-data copy, tests running
+#: against a checked-out source tree without the file) — callers fall
+#: through to no icon.
+_DEFAULT_APP_ICON = _LOGO_PATH.as_uri() if _LOGO_PATH.is_file() else ""
 
 
 @dataclass(frozen=True)
@@ -86,6 +102,8 @@ class DbusNotifier:
         hints: Mapping[str, Any] | None = None,
         replaces_id: int = 0,
         app_icon: str = "",
+        container_id: str = "",  # noqa: ARG002 — protocol kwarg ignored by desktop
+        container_name: str = "",  # noqa: ARG002 — protocol kwarg ignored by desktop
     ) -> int:
         """Send a desktop notification.
 
@@ -97,6 +115,12 @@ class DbusNotifier:
             hints: Freedesktop hint dict (values should be ``dbus_fast.Variant``).
             replaces_id: Replace an existing notification in-place.
             app_icon: Icon name or ``file:///`` URI.
+            container_id: Accepted for protocol compatibility; dropped on
+                the floor.  Freedesktop notifications render summary + body
+                + actions only, so the ID has no place in the desktop popup
+                and the caller is expected to have folded the user-facing
+                name (if any) into ``body`` already.
+            container_name: Likewise.
 
         Returns:
             Server-assigned notification ID.
@@ -111,7 +135,7 @@ class DbusNotifier:
         return await self._conn.interface.call_notify(
             self._app_name,
             replaces_id,
-            app_icon,
+            app_icon or _DEFAULT_APP_ICON,
             summary,
             body,
             actions_flat,

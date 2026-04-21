@@ -20,6 +20,7 @@ from terok_dbus._interfaces import (
 )
 from terok_dbus._notifier import DbusNotifier
 from terok_dbus._null import NullNotifier
+from terok_dbus._podman import PodmanContainerNameResolver
 from terok_dbus._protocol import Notifier
 from terok_dbus._subscriber import EventSubscriber
 
@@ -30,6 +31,7 @@ __all__ = [
     "Notification",
     "NullNotifier",
     "Notifier",
+    "PodmanContainerNameResolver",
     "create_notifier",
     "CLEARANCE_BUS_NAME",
     "CLEARANCE_INTERFACE_NAME",
