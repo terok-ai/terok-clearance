@@ -13,7 +13,11 @@ from dbus_fast.aio import MessageBus
 
 from terok_dbus._constants import BUS_NAME, INTERFACE_NAME, OBJECT_PATH
 
-_LOGO_PATH = Path(__file__).parent / "resources" / "terok-logo.png"
+# ``Path(__file__)`` can be relative under editable installs or alternative
+# loaders; ``resolve()`` before ``as_uri()`` because the latter rejects
+# relative paths with a ValueError that would fire at import time and
+# prevent the module from loading at all.
+_LOGO_PATH = Path(__file__).resolve().parent / "resources" / "terok-logo.png"
 
 #: ``file://`` URI of the bundled terok logo.  Freedesktop daemons render a
 #: PNG passed as ``app_icon`` alongside summary + body; this gives every

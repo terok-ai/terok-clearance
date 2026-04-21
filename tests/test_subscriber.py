@@ -292,6 +292,49 @@ class TestSendVerdict:
         assert msg.body == [CONTAINER, _REQUEST_ID, DEST_IP, "allow"]
 
 
+# ── Name resolver off-thread + error handling ─────────────────────────
+
+
+class TestResolveContainerName:
+    """``_resolve_container_name`` offloads the resolver and fails soft."""
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_when_resolver_absent(self, mock_notifier: AsyncMock) -> None:
+        """No injected resolver → empty string, no thread spawned."""
+        sub = EventSubscriber(mock_notifier, bus=_mock_bus())
+        assert await sub._resolve_container_name(CONTAINER) == ""
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_empty_container(self, mock_notifier: AsyncMock) -> None:
+        """Defensive short-circuit for empty container IDs from bad wire data."""
+        resolver = MagicMock(return_value="should-not-be-called")
+        sub = EventSubscriber(mock_notifier, bus=_mock_bus(), name_resolver=resolver)
+        assert await sub._resolve_container_name("") == ""
+        resolver.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_resolves_via_to_thread(self, mock_notifier: AsyncMock) -> None:
+        """Resolver runs through ``asyncio.to_thread`` so the loop stays free."""
+        resolver = MagicMock(return_value="my-task")
+        sub = EventSubscriber(mock_notifier, bus=_mock_bus(), name_resolver=resolver)
+        with patch("terok_dbus._subscriber.asyncio.to_thread") as to_thread:
+
+            async def fake(func, arg):
+                return func(arg)
+
+            to_thread.side_effect = fake
+            result = await sub._resolve_container_name(CONTAINER)
+        assert result == "my-task"
+        to_thread.assert_awaited_once_with(resolver, CONTAINER)
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_resolver_exception(self, mock_notifier: AsyncMock) -> None:
+        """A resolver that raises can't knock notifications off the rails."""
+        resolver = MagicMock(side_effect=RuntimeError("podman unreachable"))
+        sub = EventSubscriber(mock_notifier, bus=_mock_bus(), name_resolver=resolver)
+        assert await sub._resolve_container_name(CONTAINER) == ""
+
+
 # ── Clearance1 routing (legacy path) ──────────────────────────────────
 
 

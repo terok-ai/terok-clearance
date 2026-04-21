@@ -356,7 +356,7 @@ class EventSubscriber:
         # untouched ID still flows through the ``container_id`` kwarg for
         # TUI consumers that want both, and is what we track internally
         # for verdict-routing on the bus.
-        name = self._name_resolver(container) if self._name_resolver else ""
+        name = await self._resolve_container_name(container)
         _log.info("Blocked: %s:%d/%s (%s) [%s]", display, port, proto_name, container, request_id)
         nid = await self._notifier.notify(
             f"Blocked: {display}:{port}",
@@ -398,7 +398,7 @@ class EventSubscriber:
         else:
             title = f"{failure_titles.get(action, action.title() + ' failed')}: {pending.dest}"
             hints = _HINT_VERDICT_FAILED
-        name = self._name_resolver(container) if self._name_resolver else ""
+        name = await self._resolve_container_name(container)
         await self._notifier.notify(
             title,
             f"Container: {name or container}",
@@ -494,6 +494,27 @@ class EventSubscriber:
         task = asyncio.get_running_loop().create_task(coro)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
+
+    async def _resolve_container_name(self, container: str) -> str:
+        """Run the injected resolver on a worker thread — never block the loop.
+
+        The default :class:`PodmanContainerNameResolver` shells out to
+        ``podman inspect`` with a 5 s timeout; the first-time miss for each
+        container would otherwise stall every other coroutine on the hub
+        (incoming signals, outgoing Notify calls, shutdown handlers).
+        Subsequent calls are cache hits, but wrapping the sync call in
+        :func:`asyncio.to_thread` makes the first-miss case equally safe
+        and keeps the two code paths symmetric.  Any exception (malformed
+        argv, unexpected podman behaviour) falls back to ``""`` so one bad
+        container never knocks the notification pipeline off the rails.
+        """
+        if not container or self._name_resolver is None:
+            return ""
+        try:
+            return await asyncio.to_thread(self._name_resolver, container)
+        except Exception:
+            _log.exception("Container name resolution failed for %s", container)
+            return ""
 
     def _dispatch_lifecycle(self, method: str, *args: str) -> None:
         """Invoke a lifecycle hook on the notifier if it implements one.
