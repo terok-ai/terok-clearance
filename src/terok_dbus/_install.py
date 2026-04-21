@@ -1,0 +1,146 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
+"""Install the terok-dbus systemd user unit and reload the user daemon.
+
+Renders the bundled ``terok-dbus.service`` into
+``$XDG_CONFIG_HOME/systemd/user/terok-dbus.service`` with ``{{BIN}}``
+replaced by the operator-resolved ``terok-dbus`` invocation, and
+optionally bakes in ``TEROK_SHIELD_STATE_DIR`` so the hub sees the
+same shield state root as the interactive shell at install time.
+Matches the install patterns used by ``terok-credential-proxy`` and
+``terok-gate``.
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess  # nosec B404
+from importlib import resources as importlib_resources
+from pathlib import Path
+
+UNIT_NAME = "terok-dbus.service"
+STATE_DIR_ENV = "TEROK_SHIELD_STATE_DIR"
+
+
+def install_service(bin_path: Path | str) -> Path:
+    """Render the unit template, write it into the user systemd directory, reload.
+
+    Captures ``TEROK_SHIELD_STATE_DIR`` from the current environment
+    (typically the interactive shell's) and bakes it into the generated
+    unit as an ``Environment=`` directive so the hub's shelled-out
+    ``terok-shield`` CLI resolves the same state root.  When the env
+    var is unset, no ``Environment=`` line is added and shield's CLI
+    uses its XDG-based default (which is usually the right answer).
+
+    Args:
+        bin_path: Absolute path to the ``terok-dbus`` launcher (typically
+            ``shutil.which("terok-dbus")`` or
+            ``"{sys.executable} -m terok_dbus._cli"``).
+
+    Returns:
+        The on-disk path the unit was written to.
+    """
+    template = _read_template()
+    # ``{{BIN}}`` ends up on an ``ExecStart=`` line, which systemd tokenises
+    # with POSIX-shell rules.  Two shapes are expected:
+    #
+    #   * Single absolute path from ``shutil.which("terok-dbus")`` — no
+    #     embedded spaces on any standard install layout (pipx/system pkg).
+    #   * Multi-token ``"/usr/bin/python -m terok_dbus._cli"`` — already
+    #     space-separated tokens, correct for ``ExecStart=`` as-is.
+    #
+    # Neither needs extra quoting.  Refuse obviously awkward values (quotes,
+    # newlines) rather than emit an unreadable unit file.
+    bin_str = str(bin_path)
+    if any(ch in bin_str for ch in ('"', "'", "\n", "\r")):
+        raise ValueError(f"bin_path is not safe to embed in ExecStart=: {bin_str!r}")
+    rendered = template.replace("{{BIN}}", bin_str)
+    rendered = _inject_state_dir_env(rendered, os.environ.get(STATE_DIR_ENV))
+    dest = _user_systemd_dir() / UNIT_NAME
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(rendered)
+    _daemon_reload()
+    return dest
+
+
+def _inject_state_dir_env(rendered: str, state_dir: str | None) -> str:
+    """Add an ``Environment=TEROK_SHIELD_STATE_DIR=...`` line when the env was set.
+
+    The line goes into the ``[Service]`` block immediately after
+    ``ExecStart=``; keeps the unit readable as a narrative (what it runs,
+    then what env it runs with).  A leading marker comment makes the
+    mismatch-check in sickbay auditable at a glance.
+    """
+    if not state_dir:
+        return rendered
+    marker = f"# injected-at-install: {STATE_DIR_ENV}={state_dir}\n"
+    env_line = f"Environment={STATE_DIR_ENV}={state_dir}\n"
+    lines = rendered.splitlines(keepends=True)
+    result: list[str] = []
+    injected = False
+    for line in lines:
+        result.append(line)
+        if not injected and line.startswith("ExecStart="):
+            result.append(marker)
+            result.append(env_line)
+            injected = True
+    return "".join(result)
+
+
+def _read_template() -> str:
+    """Load the unit template from the installed package's ``resources/systemd``."""
+    source = (
+        importlib_resources.files("terok_dbus")
+        .joinpath("resources")
+        .joinpath("systemd")
+        .joinpath(UNIT_NAME)
+    )
+    return source.read_text()
+
+
+def _user_systemd_dir() -> Path:
+    """Resolve ``$XDG_CONFIG_HOME/systemd/user`` (default ``~/.config/systemd/user``)."""
+    xdg_config = os.environ.get("XDG_CONFIG_HOME")
+    base = Path(xdg_config) if xdg_config else Path.home() / ".config"
+    return base / "systemd" / "user"
+
+
+def _daemon_reload() -> None:
+    """Ask the user's systemd to re-read its unit files; silently skip if unavailable."""
+    systemctl = shutil.which("systemctl")
+    if not systemctl:
+        return
+    subprocess.run(  # nosec B603
+        [systemctl, "--user", "daemon-reload"],
+        check=False,
+        capture_output=True,
+    )
+
+
+def read_installed_unit() -> str | None:
+    """Return the contents of the installed hub unit, or ``None`` if absent.
+
+    Used by sickbay to diagnose configuration drift against the current
+    shell's ``TEROK_SHIELD_STATE_DIR`` setting.
+    """
+    path = _user_systemd_dir() / UNIT_NAME
+    try:
+        return path.read_text()
+    except OSError:
+        return None
+
+
+def extract_baked_state_dir(unit_text: str) -> str | None:
+    """Pull the baked ``TEROK_SHIELD_STATE_DIR`` out of an installed unit's text.
+
+    Returns ``None`` when no ``Environment=TEROK_SHIELD_STATE_DIR=...``
+    line is present.
+    """
+    needle = f"Environment={STATE_DIR_ENV}="
+    for line in unit_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(needle):
+            return stripped[len(needle) :]
+    return None
