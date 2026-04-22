@@ -3,14 +3,12 @@
 
 """Render clearance-hub events as desktop notifications.
 
-Wraps :class:`ClearanceClient` with the stateful bits a presentation
-layer needs: live-block dedup, verdict routing through action
-callbacks, ShieldDown popup tracking so ShieldUp can retire the matching
-alert, and identity resolution for terok-managed containers.  The
-callback surface (``Notifier.notify``, ``on_action``, ``close``, plus
-optional ``on_shield_up`` / ``on_shield_down`` lifecycle hooks)
-mirrors the old D-Bus-backed shape, so consumers (desktop notifier,
-TUI clearance screen) swap transports without touching their own code.
+Turns the event stream from :class:`ClearanceClient` into calls on an
+injected :class:`Notifier`: a block arrives, the operator sees a popup
+with Allow/Deny actions, clicks route back to the hub as a ``Verdict``.
+Live-block dedup, shield-down popup tracking, and task-identity
+resolution live here because they're all presentation concerns —
+the hub stays transport-only.
 """
 
 from __future__ import annotations
@@ -135,28 +133,25 @@ class _PendingBlock:
 
 
 class EventSubscriber:
-    """Render clearance-hub events as desktop notifications.
+    """Bridge clearance-hub events into desktop notifications.
 
-    Owns the stateful bits a presentation layer needs: live-block dedup,
-    verdict routing through action callbacks, ShieldDown popup tracking
-    so ShieldUp can retire the matching alert, and identity resolution
-    for terok-managed containers.  Transport is :class:`ClearanceClient`
-    — one clean varlink connection pair — and everything D-Bus-related
-    that used to live here is gone.
+    Owns the presentation-layer state a rendering client needs: live-block
+    dedup keyed on ``(container, target)``, the tracked ``ShieldDown``
+    popup per container so ``ShieldUp`` can retire it, and verdict routing
+    through notifier action callbacks.
 
     Args:
-        notifier: Desktop notification backend (or any ``Notifier``).
-        client: Optional pre-configured :class:`ClearanceClient` for
-            tests.  ``None`` means we create one on :meth:`start` using
-            the default socket path.
-        identity_resolver: Optional callable mapping a short container
-            ID to a :class:`ContainerIdentity`.  When provided, terok
-            task annotations surface as "Task: project/task_id · name"
-            in the body; otherwise we fall back to the raw container
-            ID.  Called from a worker thread so a slow ``podman
-            inspect`` doesn't stall the event loop.
-        socket_path: Optional override for the clearance socket when
-            ``client`` isn't supplied.  Mostly for testing.
+        notifier: Desktop notification backend (any ``Notifier`` works).
+        client: Pre-configured :class:`ClearanceClient`.  When omitted,
+            one is created on :meth:`start` pointing at *socket_path*
+            (defaulting to :func:`default_clearance_socket_path`).
+        identity_resolver: Turns a short container ID into a
+            :class:`ContainerIdentity` so terok task annotations surface
+            as "Task: project/task_id · name" bodies.  Called from a
+            worker thread so a slow ``podman inspect`` doesn't stall
+            the event loop.  ``None`` renders the raw container ID.
+        socket_path: Clearance-socket override when *client* isn't
+            supplied (tests).
     """
 
     def __init__(

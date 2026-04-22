@@ -39,6 +39,7 @@ from terok_dbus._wire import (
     ShieldCliFailed,
     UnknownRequest,
     VerdictTupleMismatch,
+    default_clearance_socket_path,
 )
 
 _log = logging.getLogger(__name__)
@@ -61,17 +62,6 @@ _STDERR_CAP_BYTES = 512
 #: render surface, so a modest depth is plenty; keeping the queue
 #: bounded also prevents a stuck client from pinning arbitrary memory.
 _SUBSCRIBER_QUEUE_DEPTH = 128
-
-#: Canonical clearance-socket basename, under ``$XDG_RUNTIME_DIR``.
-_CLEARANCE_SOCKET_BASENAME = "terok-clearance.sock"
-
-
-def default_clearance_socket_path() -> Path:
-    """Return the canonical clearance-socket path under ``$XDG_RUNTIME_DIR``."""
-    from terok_dbus._unix_socket import runtime_socket_path
-
-    return runtime_socket_path(_CLEARANCE_SOCKET_BASENAME)
-
 
 #: Reader ``type`` → wire-level ``ClearanceEvent.type``.  Only one event
 #: renames (``pending → connection_blocked``); every other reader type

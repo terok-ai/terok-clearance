@@ -18,13 +18,26 @@ introspect the service at runtime via the standard
 
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from asyncvarlink import TypedVarlinkErrorReply, VarlinkInterface, varlinkmethod
+
+from terok_dbus._unix_socket import runtime_socket_path
 
 #: Interface name used for varlink dispatch and ``varlinkctl`` introspection.
 #: The transport is a plain unix socket (no D-Bus daemon in the loop); the
 #: name lives purely as the introspection identifier.
 CLEARANCE_INTERFACE_NAME = "org.terok.Clearance1"
+
+#: Canonical clearance-socket basename under ``$XDG_RUNTIME_DIR``.  Lives
+#: with the interface name because both identify the service on the wire:
+#: one is the varlink method namespace, the other is where to connect.
+_CLEARANCE_SOCKET_BASENAME = "terok-clearance.sock"
+
+
+def default_clearance_socket_path() -> Path:
+    """Return the canonical clearance-socket path under ``$XDG_RUNTIME_DIR``."""
+    return runtime_socket_path(_CLEARANCE_SOCKET_BASENAME)
 
 
 @dataclass

@@ -80,10 +80,10 @@ depends_on = []
 path = "terok_dbus._service"
 depends_on = []
 
-# Varlink interface + typed events/errors — asyncvarlink, no internal deps.
+# Varlink interface + typed events/errors.
 [[modules]]
 path = "terok_dbus._wire"
-depends_on = []
+depends_on = [{ path = "terok_dbus._unix_socket" }]
 
 # DbusNotifier — freedesktop.Notifications over D-Bus.
 [[modules]]
@@ -108,10 +108,7 @@ depends_on = [
 # Clearance client — varlink consumer library.
 [[modules]]
 path = "terok_dbus._client"
-depends_on = [
-    { path = "terok_dbus._hub" },
-    { path = "terok_dbus._wire" },
-]
+depends_on = [{ path = "terok_dbus._wire" }]
 
 # Event subscriber — renders events via an injected Notifier.
 [[modules]]

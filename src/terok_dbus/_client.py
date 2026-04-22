@@ -26,8 +26,7 @@ from pathlib import Path
 from asyncvarlink import VarlinkClientProtocol, connect_unix_varlink
 from asyncvarlink.error import VarlinkErrorReply
 
-from terok_dbus._hub import default_clearance_socket_path
-from terok_dbus._wire import Clearance1Interface, ClearanceEvent
+from terok_dbus._wire import Clearance1Interface, ClearanceEvent, default_clearance_socket_path
 
 _log = logging.getLogger(__name__)
 
@@ -93,16 +92,13 @@ class ClearanceClient:
         self._rpc_proxy = None
 
     async def verdict(self, container: str, request_id: str, dest: str, action: str) -> bool:
-        """Fire a ``Verdict`` RPC; return ``True`` iff ``terok-shield`` accepted.
+        """Apply *action* (``allow`` / ``deny``) to *dest* via the hub's ``Verdict`` RPC.
 
-        Typed refusal paths (:class:`UnknownRequest`,
-        :class:`VerdictTupleMismatch`, :class:`InvalidAction`,
-        :class:`ShieldCliFailed`) are logged and collapsed to
-        ``False``; the verdict_applied stream event that every other
-        subscriber receives carries the same outcome for successful
-        shield execution.  Shield-exec failures flow BOTH as a raised
-        :class:`ShieldCliFailed` to this caller AND as a ``ok=False``
-        verdict_applied event to every connected client.
+        Returns ``True`` when the hub accepted and applied the verdict,
+        ``False`` for any refusal (unknown request_id, tuple mismatch,
+        invalid action, shield-exec failure).  Callers typically ignore
+        the return value and let the subsequent ``verdict_applied``
+        event drive UI updates; refusal reasons are logged at WARNING.
         """
         if self._rpc_proxy is None:
             _log.error("verdict() called before start()")
