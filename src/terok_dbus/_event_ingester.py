@@ -26,7 +26,6 @@ import contextlib
 import json
 import logging
 import os
-import stat
 import struct
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -38,10 +37,9 @@ _SOCKET_BASENAME = "terok-shield-events.sock"
 
 def default_socket_path() -> Path:
     """Return the canonical ingester path under ``$XDG_RUNTIME_DIR``."""
-    xdg = os.environ.get("XDG_RUNTIME_DIR")
-    if not xdg:
-        xdg = f"/run/user/{os.getuid()}"
-    return Path(xdg) / _SOCKET_BASENAME
+    from terok_dbus._unix_socket import runtime_socket_path
+
+    return runtime_socket_path(_SOCKET_BASENAME)
 
 
 class EventIngester:
@@ -75,45 +73,14 @@ class EventIngester:
         self._clients: set[asyncio.Task] = set()
 
     async def start(self) -> None:
-        """Bind the socket and start accepting connections in the background.
+        """Bind the socket and start accepting connections in the background."""
+        from terok_dbus._unix_socket import bind_hardened
 
-        Hardens the bind in three places: the parent directory is owned by
-        the current uid and mode-``0700`` before we touch it; the socket
-        itself is created under a ``0177`` umask so it's already mode
-        ``0600`` the moment ``bind()`` returns (no TOCTOU window); and we
-        ``lstat`` the path afterwards to confirm it's actually a socket —
-        a symlink swap between unlink and bind would otherwise let a peer
-        redirect our ``os.chmod`` at an arbitrary file.
-        """
-        self._ensure_private_parent()
-        with contextlib.suppress(FileNotFoundError):
-            self._socket_path.unlink()
-        old_umask = os.umask(0o177)
-        try:
-            self._server = await asyncio.start_unix_server(
-                self._handle_client, path=str(self._socket_path)
-            )
-        finally:
-            os.umask(old_umask)
-        lst = os.lstat(self._socket_path)
-        if not stat.S_ISSOCK(lst.st_mode):
-            raise RuntimeError(f"ingester path is not a socket after bind: {self._socket_path}")
+        async def _factory(path: str) -> asyncio.AbstractServer:
+            return await asyncio.start_unix_server(self._handle_client, path=path)
+
+        self._server = await bind_hardened(_factory, self._socket_path, "ingester")
         _log.info("event ingester listening on %s", self._socket_path)
-
-    def _ensure_private_parent(self) -> None:
-        """Refuse to bind under a parent dir that isn't owned by us + mode 0700-ish."""
-        parent = self._socket_path.parent
-        parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        st = parent.stat()
-        if st.st_uid != os.getuid():
-            raise RuntimeError(
-                f"ingester parent dir not owned by current uid: {parent} (owner uid={st.st_uid})"
-            )
-        if st.st_mode & 0o077:
-            raise RuntimeError(
-                f"ingester parent dir is group/world accessible: "
-                f"{parent} (mode={oct(st.st_mode & 0o777)})"
-            )
 
     async def stop(self) -> None:
         """Close the server and await any in-flight client tasks."""

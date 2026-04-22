@@ -23,12 +23,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import os
 import shutil
-import stat
 import sys
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
 from pathlib import Path
 
 from asyncvarlink import VarlinkInterfaceRegistry, create_unix_server
@@ -71,30 +68,25 @@ _CLEARANCE_SOCKET_BASENAME = "terok-clearance.sock"
 
 def default_clearance_socket_path() -> Path:
     """Return the canonical clearance-socket path under ``$XDG_RUNTIME_DIR``."""
-    xdg = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
-    return Path(xdg) / _CLEARANCE_SOCKET_BASENAME
+    from terok_dbus._unix_socket import runtime_socket_path
+
+    return runtime_socket_path(_CLEARANCE_SOCKET_BASENAME)
 
 
-@dataclass
-class _LiveVerdict:
-    """One outstanding block the hub has authorised for a future ``Verdict`` call."""
-
-    container: str
-    dest: str
-
-
-#: Reader ``type`` → the ``ClearanceEvent.type`` value we emit downstream.
-#: A single mapping stands in for what used to be a catalog of per-event
-#: emitters; the event shape is flat enough that translation is a
-#: straightforward dict-copy with a renamed discriminator.
-_READER_EVENT_TYPES: dict[str, str] = {
-    "pending": "connection_blocked",
-    "container_started": "container_started",
-    "container_exited": "container_exited",
-    "shield_up": "shield_up",
-    "shield_down": "shield_down",
-    "shield_down_all": "shield_down_all",
-}
+#: Reader ``type`` → wire-level ``ClearanceEvent.type``.  Only one event
+#: renames (``pending → connection_blocked``); every other reader type
+#: flows through unchanged.  Kept as an explicit allowlist so unknown
+#: values get dropped at :meth:`ClearanceHub._relay_reader_event` rather
+#: than leaking to clients.
+_WIRE_EVENT_TYPES: frozenset[str] = frozenset(
+    {
+        "container_started",
+        "container_exited",
+        "shield_up",
+        "shield_down",
+        "shield_down_all",
+    }
+)
 
 
 class ClearanceHub:
@@ -128,7 +120,9 @@ class ClearanceHub:
         self._shield_binary = shield_binary or _find_shield_binary()
 
         self._subscribers: set[asyncio.Queue[ClearanceEvent]] = set()
-        self._live_verdicts: dict[str, _LiveVerdict] = {}
+        # request_id → (container, dest) the hub emitted in the matching
+        # ConnectionBlocked; Verdict calls must cite a triple that matches.
+        self._live_verdicts: dict[str, tuple[str, str]] = {}
 
         self._ingester: EventIngester | None = None
         self._varlink_server: object | None = None  # asyncvarlink's UnixServer
@@ -160,23 +154,12 @@ class ClearanceHub:
             )
         )
 
-        # Harden the clearance socket the same way the reader socket does:
-        # private parent, 0600 mode via umask, post-bind lstat.
-        _ensure_private_parent(self._clearance_socket)
-        with contextlib.suppress(FileNotFoundError):
-            self._clearance_socket.unlink()
-        old_umask = os.umask(0o177)
-        try:
-            self._varlink_server = await create_unix_server(
-                registry.protocol_factory, path=str(self._clearance_socket)
-            )
-        finally:
-            os.umask(old_umask)
-        lst = os.lstat(self._clearance_socket)
-        if not stat.S_ISSOCK(lst.st_mode):
-            raise RuntimeError(
-                f"clearance path is not a socket after bind: {self._clearance_socket}"
-            )
+        from terok_dbus._unix_socket import bind_hardened
+
+        async def _factory(path: str) -> object:
+            return await create_unix_server(registry.protocol_factory, path=path)
+
+        self._varlink_server = await bind_hardened(_factory, self._clearance_socket, "clearance")
         _log.info("clearance hub online at %s", self._clearance_socket)
 
     async def stop(self) -> None:
@@ -211,9 +194,12 @@ class ClearanceHub:
         reader.  Malformed events are logged and dropped — one bad line
         from a rogue reader mustn't kill the ingester.
         """
-        wire_type = _READER_EVENT_TYPES.get(raw.get("type", ""))
-        if wire_type is None:
-            _log.debug("dropping unknown reader event type %r", raw.get("type"))
+        raw_type = raw.get("type", "")
+        # Only the ``pending → connection_blocked`` renaming differs;
+        # every other reader type flows through with the same name.
+        wire_type = "connection_blocked" if raw_type == "pending" else raw_type
+        if wire_type != "connection_blocked" and wire_type not in _WIRE_EVENT_TYPES:
+            _log.debug("dropping unknown reader event type %r", raw_type)
             return
         try:
             event = _translate_reader_event(wire_type, raw)
@@ -234,18 +220,15 @@ class ClearanceHub:
         pointless translation pass on every verdict.
         """
         if event.type == "connection_blocked" and event.request_id:
-            self._live_verdicts[event.request_id] = _LiveVerdict(
-                container=event.container,
-                dest=event.domain or event.dest,
+            self._live_verdicts[event.request_id] = (
+                event.container,
+                event.domain or event.dest,
             )
         elif event.type in {"shield_down", "shield_down_all", "container_exited"}:
-            # Stale blocks: verdicts on them would write into an allowlist
-            # no-one is consulting right now.  Drop so a later same-container
-            # block starts a fresh pending entry.
             stale = [
                 rid
-                for rid, live in self._live_verdicts.items()
-                if live.container == event.container
+                for rid, (container, _) in self._live_verdicts.items()
+                if container == event.container
             ]
             for rid in stale:
                 self._live_verdicts.pop(rid, None)
@@ -289,14 +272,15 @@ class ClearanceHub:
         live = self._live_verdicts.pop(request_id, None)
         if live is None:
             raise UnknownRequest(request_id=request_id)
-        if live.container != container or live.dest != dest:
+        expected_container, expected_dest = live
+        if expected_container != container or expected_dest != dest:
             # Put it back — a later legitimate verdict on the same request
             # should still be accepted, so this call's mismatch mustn't
             # consume the entry.
             self._live_verdicts[request_id] = live
             raise VerdictTupleMismatch(
-                expected_container=live.container,
-                expected_dest=live.dest,
+                expected_container=expected_container,
+                expected_dest=expected_dest,
                 got_container=container,
                 got_dest=dest,
             )
@@ -417,22 +401,6 @@ def _default_reader_socket() -> Path:
     return default_socket_path()
 
 
-def _ensure_private_parent(path: Path) -> None:
-    """Refuse to bind under a parent dir that isn't owned by us + mode 0700-ish."""
-    parent = path.parent
-    parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    st = parent.stat()
-    if st.st_uid != os.getuid():
-        raise RuntimeError(
-            f"clearance parent dir not owned by current uid: {parent} (owner uid={st.st_uid})"
-        )
-    if st.st_mode & 0o077:
-        raise RuntimeError(
-            f"clearance parent dir is group/world accessible: "
-            f"{parent} (mode={oct(st.st_mode & 0o777)})"
-        )
-
-
 # ── stdout bootstrapper (called from _registry._handle_serve) ──────────
 
 
@@ -443,25 +411,12 @@ async def serve() -> None:  # pragma: no cover — integration path
     on a signal-set :class:`asyncio.Event`; systemd's SIGTERM flips it,
     then :meth:`stop` tears down the server under a timeout.
     """
-    logging.basicConfig(
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        level=logging.INFO,
-        stream=sys.stderr,
-    )
+    from terok_dbus._service import configure_logging, wait_for_shutdown_signal
+
+    configure_logging()
     hub = ClearanceHub()
     await hub.start()
     try:
-        await _wait_for_shutdown_signal()
+        await wait_for_shutdown_signal()
     finally:
         await hub.stop()
-
-
-async def _wait_for_shutdown_signal() -> None:  # pragma: no cover
-    """Block until SIGINT/SIGTERM arrives."""
-    import signal as signalmod
-
-    stop = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for sig in (signalmod.SIGINT, signalmod.SIGTERM):
-        loop.add_signal_handler(sig, stop.set)
-    await stop.wait()

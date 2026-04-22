@@ -68,6 +68,16 @@ depends_on = []
 
 [[modules]]
 path = "terok_dbus._event_ingester"
+depends_on = [{ path = "terok_dbus._unix_socket" }]
+
+# Socket-hardening helpers shared by the ingester + clearance hub.
+[[modules]]
+path = "terok_dbus._unix_socket"
+depends_on = []
+
+# Long-running asyncio service helpers (logging + shutdown-signal wait).
+[[modules]]
+path = "terok_dbus._service"
 depends_on = []
 
 # Varlink interface + typed events/errors — asyncvarlink, no internal deps.
@@ -90,6 +100,8 @@ depends_on = []
 path = "terok_dbus._hub"
 depends_on = [
     { path = "terok_dbus._event_ingester" },
+    { path = "terok_dbus._service" },
+    { path = "terok_dbus._unix_socket" },
     { path = "terok_dbus._wire" },
 ]
 

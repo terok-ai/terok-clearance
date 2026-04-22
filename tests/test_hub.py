@@ -111,16 +111,13 @@ class TestUpdateLiveVerdicts:
         """Domain beats raw IP — shield dispatches ``allow_domain`` on shape."""
         hub = _hub()
         hub._update_live_verdicts(_blocked())
-        assert f"{CONTAINER}:1" in hub._live_verdicts
-        live = hub._live_verdicts[f"{CONTAINER}:1"]
-        assert live.container == CONTAINER
-        assert live.dest == DOMAIN
+        assert hub._live_verdicts[f"{CONTAINER}:1"] == (CONTAINER, DOMAIN)
 
     def test_connection_blocked_falls_back_to_dest_when_no_domain(self) -> None:
         """Readers without dnsmasq resolution pass an empty domain."""
         hub = _hub()
         hub._update_live_verdicts(_blocked(domain=""))
-        assert hub._live_verdicts[f"{CONTAINER}:1"].dest == DEST_IP
+        assert hub._live_verdicts[f"{CONTAINER}:1"] == (CONTAINER, DEST_IP)
 
     def test_shield_down_purges_bindings_for_container(self) -> None:
         """Bypass means pending blocks are stale; drop them."""

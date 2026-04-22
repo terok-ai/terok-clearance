@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable, Coroutine
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -112,7 +112,12 @@ def _blocked_body(
 
 @dataclass
 class _PendingBlock:
-    """One outstanding blocked-connection event awaiting an operator verdict."""
+    """One outstanding blocked-connection event awaiting an operator verdict.
+
+    ``identity`` is captured at block time and reused when
+    ``verdict_applied`` lands — avoids a second resolver round-trip for
+    the hot path of every operator click.
+    """
 
     notification_id: int
     container: str
@@ -124,10 +129,9 @@ class _PendingBlock:
     string — varlink's ``Verdict`` call carries it as ``dest`` (the hub
     dispatches to shield on shape: bare IP vs. dotted domain).
     """
+    identity: ContainerIdentity = field(default_factory=ContainerIdentity)
     count: int = 1
-    """How many times this target has been blocked since ``first_seen``."""
     first_seen: str = ""
-    """Wall-clock ``HH:MM:SS`` of the very first block on this key."""
 
 
 class EventSubscriber:
@@ -279,15 +283,14 @@ class EventSubscriber:
             container=event.container,
             request_id=event.request_id,
             target=target,
+            identity=identity,
             count=count,
             first_seen=first_seen,
         )
-        container = event.container
-        request_id = event.request_id
         await self._notifier.on_action(
             nid,
             lambda action: self._dispatch(
-                self._send_verdict(container, request_id, target, action)
+                self._send_verdict(event.container, event.request_id, target, action)
             ),
         )
 
@@ -299,14 +302,7 @@ class EventSubscriber:
         return None
 
     async def _handle_verdict_applied(self, event: ClearanceEvent) -> None:
-        """Replace the notification in place with the verdict outcome.
-
-        On failure, change both the verb and the urgency: the old code
-        said "Allowed: X (failed)" with normal-urgency styling, which
-        reads as a success to everyone not pausing to parse the
-        parenthetical.  "Allow failed" / "Deny failed" with critical
-        hints reflects what actually happened.
-        """
+        """Replace the pending notification in place with the verdict outcome."""
         pending = self._pending.pop(event.request_id, None)
         if pending is None:
             return
@@ -328,7 +324,7 @@ class EventSubscriber:
                 event.container,
                 pending.container,
             )
-        identity = await self._resolve_identity(pending.container)
+        identity = pending.identity
         await self._notifier.notify(
             title,
             _identity_line(identity, pending.container),
