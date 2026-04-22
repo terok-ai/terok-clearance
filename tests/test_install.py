@@ -11,7 +11,13 @@ from unittest.mock import patch
 import pytest
 
 from terok_dbus import _install
-from terok_dbus._install import UNIT_NAME, install_service, read_installed_unit
+from terok_dbus._install import (
+    UNIT_NAME,
+    check_units_outdated,
+    install_service,
+    read_installed_unit,
+    read_installed_unit_version,
+)
 
 
 class TestInstallService:
@@ -86,3 +92,64 @@ class TestReadInstalledUnit:
     ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
         assert read_installed_unit() is None
+
+
+class TestUnitVersion:
+    """Version marker lets sickbay tell fresh installs from stale ones."""
+
+    def test_rendered_unit_carries_current_version(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        with patch.object(_install, "_daemon_reload"):
+            install_service(Path("/a/terok-dbus"))
+        assert read_installed_unit_version() == _install._UNIT_VERSION
+
+    def test_read_version_returns_none_without_marker(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A pre-varlink Shield1 hub would have no marker line at all."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        unit_path = tmp_path / "systemd" / "user" / UNIT_NAME
+        unit_path.parent.mkdir(parents=True)
+        unit_path.write_text("[Unit]\nDescription=legacy\n[Service]\nExecStart=/x serve\n")
+        assert read_installed_unit_version() is None
+
+    def test_check_outdated_silent_on_fresh_install(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        with patch.object(_install, "_daemon_reload"):
+            install_service(Path("/a/terok-dbus"))
+        assert check_units_outdated() is None
+
+    def test_check_outdated_silent_when_absent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No unit installed is headless-host shape, not a drift warning."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        assert check_units_outdated() is None
+
+    def test_check_outdated_flags_unversioned_unit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        unit_path = tmp_path / "systemd" / "user" / UNIT_NAME
+        unit_path.parent.mkdir(parents=True)
+        unit_path.write_text("[Unit]\n[Service]\nExecStart=/x\n")
+        msg = check_units_outdated()
+        assert msg is not None
+        assert "unversioned" in msg
+        assert "terok setup" in msg
+
+    def test_check_outdated_flags_older_version(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        unit_path = tmp_path / "systemd" / "user" / UNIT_NAME
+        unit_path.parent.mkdir(parents=True)
+        unit_path.write_text(f"# terok-dbus-version: {_install._UNIT_VERSION - 1}\n[Service]\n")
+        msg = check_units_outdated()
+        assert msg is not None
+        assert f"v{_install._UNIT_VERSION - 1}" in msg
+        assert f"v{_install._UNIT_VERSION}" in msg

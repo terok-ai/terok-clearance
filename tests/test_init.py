@@ -30,8 +30,10 @@ class TestPublicApi:
             "ShieldCliFailed",
             "UnknownRequest",
             "VerdictTupleMismatch",
+            "check_units_outdated",
             "create_notifier",
             "default_clearance_socket_path",
+            "read_installed_unit_version",
             "serve",
         }
         assert set(terok_dbus.__all__) == expected

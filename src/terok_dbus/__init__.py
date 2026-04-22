@@ -24,6 +24,7 @@ from terok_dbus._callback import CallbackNotifier, Notification
 from terok_dbus._client import ClearanceClient
 from terok_dbus._hub import ClearanceHub, default_clearance_socket_path, serve
 from terok_dbus._identity import ContainerIdentity
+from terok_dbus._install import check_units_outdated, read_installed_unit_version
 from terok_dbus._notifier import DbusNotifier
 from terok_dbus._null import NullNotifier
 from terok_dbus._protocol import Notifier
@@ -55,8 +56,10 @@ __all__ = [
     "ShieldCliFailed",
     "UnknownRequest",
     "VerdictTupleMismatch",
+    "check_units_outdated",
     "create_notifier",
     "default_clearance_socket_path",
+    "read_installed_unit_version",
     "serve",
 ]
 

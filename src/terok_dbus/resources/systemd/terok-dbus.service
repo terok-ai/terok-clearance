@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 #
+# terok-dbus-version: {{UNIT_VERSION}}
+#
 # systemd user service for the terok-dbus Shield1 clearance hub.
 #
 # The {{BIN}} placeholder is resolved at install time by the install

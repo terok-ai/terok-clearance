@@ -20,6 +20,19 @@ from pathlib import Path
 
 UNIT_NAME = "terok-dbus.service"
 
+_UNIT_VERSION = 1
+"""Bump when the unit template's semantics change.
+
+Substituted into the ``{{UNIT_VERSION}}`` marker at render time so
+:func:`check_units_outdated` can tell an installed unit from an older
+generation — the varlink hub, for example, ships as v1; any installed
+unit without a marker (the pre-varlink Shield1 D-Bus hub) reads as
+``None`` and is surfaced as stale.
+"""
+
+_VERSION_MARKER_PREFIX = "# terok-dbus-version:"
+"""First non-SPDX line in every shipped template; also the parser key."""
+
 
 def install_service(bin_path: Path | list[str]) -> Path:
     """Render the unit template, write it into the user systemd directory, reload.
@@ -38,7 +51,9 @@ def install_service(bin_path: Path | list[str]) -> Path:
         The on-disk path the unit was written to.
     """
     template = _read_template()
-    rendered = template.replace("{{BIN}}", _render_exec_start(bin_path))
+    rendered = template.replace("{{BIN}}", _render_exec_start(bin_path)).replace(
+        "{{UNIT_VERSION}}", str(_UNIT_VERSION)
+    )
     dest = _user_systemd_dir() / UNIT_NAME
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(rendered)
@@ -111,3 +126,44 @@ def read_installed_unit() -> str | None:
         return path.read_text()
     except OSError:
         return None
+
+
+def read_installed_unit_version() -> int | None:
+    """Return the ``# terok-dbus-version:`` stamp of the installed unit.
+
+    Returns ``None`` when the unit is absent or predates the version
+    marker (the pre-varlink Shield1 D-Bus hub was shipped without
+    one).  ``check_units_outdated`` builds the operator-facing message
+    on top of this.
+    """
+    unit = read_installed_unit()
+    if unit is None:
+        return None
+    for line in unit.splitlines():
+        if line.startswith(_VERSION_MARKER_PREFIX):
+            try:
+                return int(line.split(":", 1)[1].strip())
+            except ValueError:
+                return None
+    return None
+
+
+def check_units_outdated() -> str | None:
+    """Return a one-line drift warning if the installed unit is stale, else ``None``.
+
+    ``None`` is returned when nothing is installed — the caller decides
+    whether that counts as an error (``terok setup`` skipped) or is
+    fine (headless host).  A stale install (older marker, or no
+    marker at all) yields a message ending in ``rerun `terok setup```
+    so ``sickbay --fix`` has an obvious next action.
+    """
+    if not (_user_systemd_dir() / UNIT_NAME).is_file():
+        return None
+    installed = read_installed_unit_version()
+    if installed is None or installed < _UNIT_VERSION:
+        installed_label = "unversioned" if installed is None else f"v{installed}"
+        return (
+            f"{UNIT_NAME} is outdated "
+            f"(installed {installed_label}, expected v{_UNIT_VERSION}) — rerun `terok setup`."
+        )
+    return None
