@@ -50,6 +50,20 @@ class ClearanceClient:
     can't kill the stream for every subsequent event.
     """
 
+    #: Cap on the reconnect back-off.  Keeps latency-after-hub-restart
+    #: bounded for the TUI + notifier while still damping a flapping hub.
+    _MAX_RECONNECT_BACKOFF_S = 10.0
+
+    #: Socket-closed error classes that should trigger a silent reconnect.
+    #: Anything else in the Subscribe() loop is logged as an exception.
+    _DISCONNECT_ERRORS = (
+        ConnectionResetError,
+        ConnectionAbortedError,
+        BrokenPipeError,
+        EOFError,
+        OSError,
+    )
+
     def __init__(self, *, socket_path: Path | None = None) -> None:
         """Remember the target socket; defaults to :func:`default_clearance_socket_path`."""
         self._socket_path = socket_path or default_clearance_socket_path()
@@ -60,18 +74,11 @@ class ClearanceClient:
         self._rpc_proxy: object | None = None
         self._stream_task: asyncio.Task[None] | None = None
         self._stopping = False
-        # Poked by :meth:`poke_reconnect` to cut short the current
-        # back-off sleep — the TUI sets this on terminal-focus gain
-        # so an idle operator's window snaps back online instead of
-        # waiting out the ten-second back-off cap.  Lazily created on
-        # first use because the running event loop may not exist yet
-        # at ``__init__`` time (e.g. when a Textual App builds its
-        # ``ClearanceClient`` from a sync ``on_mount``).
-        self._reconnect_poke: asyncio.Event | None = None
-
-    #: Cap on the reconnect back-off.  Keeps latency-after-hub-restart
-    #: bounded for the TUI + notifier while still damping a flapping hub.
-    _MAX_RECONNECT_BACKOFF_S = 10.0
+        # Set by :meth:`poke_reconnect`; awaited inside the back-off
+        # window.  Constructed here (not lazily) so a focus-gain poke
+        # that lands between ``start()`` and the first ``_run_stream``
+        # iteration isn't silently dropped.
+        self._reconnect_poke = asyncio.Event()
 
     async def start(self, on_event: EventCallback) -> None:
         """Open both connections and begin relaying events to *on_event*.
@@ -121,15 +128,13 @@ class ClearanceClient:
         self._close_transports()
 
     def poke_reconnect(self) -> None:
-        """Skip the current back-off sleep; try to reconnect immediately.
+        """Skip any in-flight reconnect back-off and retry immediately.
 
-        No-op when the stream is healthy (or not started) — the poke
-        only registers inside :meth:`_run_stream`'s backoff window.
-        Safe to call from any coroutine on the client's event loop;
-        callers (TUI focus handler) don't need to await anything.
+        Idempotent; a no-op when the stream is healthy because the
+        event is only awaited inside :meth:`_run_stream`'s back-off
+        window.
         """
-        if self._reconnect_poke is not None:
-            self._reconnect_poke.set()
+        self._reconnect_poke.set()
 
     async def verdict(self, container: str, request_id: str, dest: str, action: str) -> bool:
         """Apply *action* (``allow`` / ``deny``) to *dest* via the hub's ``Verdict`` RPC.
@@ -165,19 +170,13 @@ class ClearanceClient:
     async def _run_stream(self) -> None:
         """Pump Subscribe() events into the user callback, reconnecting on drop.
 
-        On ``systemctl restart terok-dbus`` the stream iterator raises
-        ``ConnectionResetError`` (or the socket-closed sibling errors);
-        sleep with exponential back-off, reopen both transports, and
-        resume — TUI / notifier consumers don't have to restart.
-
-        Events that occur during the disconnected window are lost:
-        the hub holds no per-subscriber replay buffer.  Snapshot-style
-        reconciliation (re-query container state from podman after
-        reconnect) belongs to individual consumers.
+        Events that occur during the disconnected window are lost —
+        the hub holds no per-subscriber replay buffer, and snapshot-
+        style reconciliation (re-query container state on reconnect)
+        belongs to individual consumers.
         """
         if self._sub_proxy is None:
             raise RuntimeError("ClearanceClient._run_stream called before connect()")
-        self._reconnect_poke = asyncio.Event()
         backoff = 1.0
         while not self._stopping:
             try:
@@ -189,40 +188,27 @@ class ClearanceClient:
                         await self._on_event(event)
                     except Exception:
                         _log.exception("event callback raised for %r", event)
-                # Stream ended without raising — treat like a disconnect
-                # unless we're being stopped explicitly.
             except asyncio.CancelledError:
                 raise
-            except (
-                ConnectionResetError,
-                ConnectionAbortedError,
-                BrokenPipeError,
-                EOFError,
-                OSError,
-            ) as exc:
+            except Exception as exc:  # noqa: BLE001 — any drop falls through to reconnect
                 if self._stopping:
                     return
-                _log.info("clearance event stream ended (%s); reconnecting in %.1fs", exc, backoff)
-            except Exception:
-                if self._stopping:
-                    return
-                _log.exception("clearance event stream died; reconnecting in %.1fs", backoff)
+                if isinstance(exc, self._DISCONNECT_ERRORS):
+                    _log.info(
+                        "clearance event stream ended (%s); reconnecting in %.1fs", exc, backoff
+                    )
+                else:
+                    _log.exception("clearance event stream died; reconnecting in %.1fs", backoff)
             if self._stopping:
                 return
             self._close_transports()
-            # Honour an in-flight :meth:`poke_reconnect` call by cutting
-            # the back-off short.  The poke is cleared eagerly here so
-            # two fast pokes in succession still collapse into one
-            # retry cycle.
-            poke_fired = False
-            with contextlib.suppress(asyncio.TimeoutError):
+            try:
                 await asyncio.wait_for(self._reconnect_poke.wait(), timeout=backoff)
-                poke_fired = True
-            if poke_fired:
+            except TimeoutError:
+                backoff = min(backoff * 2, self._MAX_RECONNECT_BACKOFF_S)
+            else:
                 self._reconnect_poke.clear()
                 backoff = 1.0
-            else:
-                backoff = min(backoff * 2, self._MAX_RECONNECT_BACKOFF_S)
             try:
                 await self._connect()
                 _log.info("clearance client reconnected to hub")
@@ -231,17 +217,3 @@ class ClearanceClient:
                 raise
             except Exception as exc:  # noqa: BLE001 — retry any connect failure
                 _log.info("hub reconnect failed (%s); retrying", exc)
-                # Loop around; the next ``await asyncio.sleep(backoff)`` throttles.
-
-    async def wait_closed(self) -> None:
-        """Return when the Subscribe() stream task has ended.
-
-        Lets consumers race the shutdown-signal wait against a hub
-        disconnect — :func:`asyncio.wait` picks whichever fires first.
-        Swallowing the task's own exception is fine here; ``_run_stream``
-        already logged at the right severity.
-        """
-        if self._stream_task is None:
-            return
-        with contextlib.suppress(asyncio.CancelledError, Exception):
-            await self._stream_task
