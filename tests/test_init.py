@@ -14,23 +14,25 @@ class TestPublicApi:
 
     def test_all_exports(self):
         expected = {
+            "CLEARANCE_INTERFACE_NAME",
             "CallbackNotifier",
+            "Clearance1Interface",
+            "ClearanceClient",
+            "ClearanceEvent",
+            "ClearanceHub",
             "ContainerIdentity",
             "DbusNotifier",
             "EventSubscriber",
+            "InvalidAction",
             "Notification",
-            "NullNotifier",
             "Notifier",
-            "PodmanIdentityResolver",
+            "NullNotifier",
+            "ShieldCliFailed",
+            "UnknownRequest",
+            "VerdictTupleMismatch",
             "create_notifier",
-            "CLEARANCE_BUS_NAME",
-            "CLEARANCE_INTERFACE_NAME",
-            "CLEARANCE_OBJECT_PATH",
-            "CLEARANCE_XML",
-            "SHIELD_BUS_NAME",
-            "SHIELD_INTERFACE_NAME",
-            "SHIELD_OBJECT_PATH",
-            "SHIELD_XML",
+            "default_clearance_socket_path",
+            "serve",
         }
         assert set(terok_dbus.__all__) == expected
 

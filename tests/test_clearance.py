@@ -236,7 +236,7 @@ class TestRunLifecycle:
         fake_stdin = io.StringIO("q\n")
 
         with (
-            patch("terok_dbus.EventSubscriber", return_value=mock_subscriber),
+            patch("terok_dbus._subscriber.EventSubscriber", return_value=mock_subscriber),
             patch.object(sys, "stdin", fake_stdin),
         ):
             await tc.run()
@@ -254,27 +254,27 @@ class TestRunLifecycle:
         fake_stdin = io.StringIO("")  # immediate EOF
 
         with (
-            patch("terok_dbus.EventSubscriber", return_value=mock_subscriber),
+            patch("terok_dbus._subscriber.EventSubscriber", return_value=mock_subscriber),
             patch.object(sys, "stdin", fake_stdin),
         ):
             await tc.run()
 
         mock_subscriber.stop.assert_awaited_once()
 
-    async def test_run_dbus_unavailable(self, capsys) -> None:
-        """run() exits with error when D-Bus connection fails."""
+    async def test_run_hub_unavailable(self, capsys) -> None:
+        """run() exits with error when the clearance hub can't be reached."""
         tc = _TerminalClearance()
         mock_subscriber = AsyncMock()
-        mock_subscriber.start.side_effect = OSError("no bus")
+        mock_subscriber.start.side_effect = OSError("no hub socket")
 
         with (
-            patch("terok_dbus.EventSubscriber", return_value=mock_subscriber),
+            patch("terok_dbus._subscriber.EventSubscriber", return_value=mock_subscriber),
             pytest.raises(SystemExit) as exc_info,
         ):
             await tc.run()
 
         assert exc_info.value.code == 1
-        assert "D-Bus unavailable" in capsys.readouterr().err
+        assert "clearance hub unavailable" in capsys.readouterr().err
 
     async def test_run_clearance_entry_point(self) -> None:
         """run_clearance() creates and runs a _TerminalClearance."""
@@ -282,7 +282,7 @@ class TestRunLifecycle:
         fake_stdin = io.StringIO("q\n")
 
         with (
-            patch("terok_dbus.EventSubscriber", return_value=mock_subscriber),
+            patch("terok_dbus._subscriber.EventSubscriber", return_value=mock_subscriber),
             patch.object(sys, "stdin", fake_stdin),
         ):
             await run_clearance()

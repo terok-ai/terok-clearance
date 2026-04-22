@@ -1,48 +1,63 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""D-Bus desktop notification package for terok."""
+"""Clearance hub + desktop notification library for terok.
+
+Two unrelated wire formats live under this one package:
+
+* ``org.terok.Clearance1`` over a unix-socket **varlink** transport —
+  the hub (:class:`ClearanceHub`) and the client library
+  (:class:`ClearanceClient`, :class:`EventSubscriber`) that drive the
+  per-container block / verdict / lifecycle flow.
+* ``org.freedesktop.Notifications`` over **D-Bus** — the
+  :class:`DbusNotifier` wrapper that renders those events as desktop
+  popups.  Kept because that's the OS API; every other D-Bus path in
+  this package (``org.terok.Shield1``) was removed in favour of the
+  varlink transport.
+"""
 
 import logging
 
 from dbus_fast import DBusError
 
 from terok_dbus._callback import CallbackNotifier, Notification
+from terok_dbus._client import ClearanceClient
+from terok_dbus._hub import ClearanceHub, default_clearance_socket_path, serve
 from terok_dbus._identity import ContainerIdentity
-from terok_dbus._interfaces import (
-    CLEARANCE_BUS_NAME,
-    CLEARANCE_INTERFACE_NAME,
-    CLEARANCE_OBJECT_PATH,
-    CLEARANCE_XML,
-    SHIELD_BUS_NAME,
-    SHIELD_INTERFACE_NAME,
-    SHIELD_OBJECT_PATH,
-    SHIELD_XML,
-)
 from terok_dbus._notifier import DbusNotifier
 from terok_dbus._null import NullNotifier
-from terok_dbus._podman import PodmanIdentityResolver
 from terok_dbus._protocol import Notifier
 from terok_dbus._subscriber import EventSubscriber
+from terok_dbus._wire import (
+    CLEARANCE_INTERFACE_NAME,
+    Clearance1Interface,
+    ClearanceEvent,
+    InvalidAction,
+    ShieldCliFailed,
+    UnknownRequest,
+    VerdictTupleMismatch,
+)
 
 __all__ = [
+    "CLEARANCE_INTERFACE_NAME",
     "CallbackNotifier",
+    "Clearance1Interface",
+    "ClearanceClient",
+    "ClearanceEvent",
+    "ClearanceHub",
     "ContainerIdentity",
     "DbusNotifier",
     "EventSubscriber",
+    "InvalidAction",
     "Notification",
-    "NullNotifier",
     "Notifier",
-    "PodmanIdentityResolver",
+    "NullNotifier",
+    "ShieldCliFailed",
+    "UnknownRequest",
+    "VerdictTupleMismatch",
     "create_notifier",
-    "CLEARANCE_BUS_NAME",
-    "CLEARANCE_INTERFACE_NAME",
-    "CLEARANCE_OBJECT_PATH",
-    "CLEARANCE_XML",
-    "SHIELD_BUS_NAME",
-    "SHIELD_INTERFACE_NAME",
-    "SHIELD_OBJECT_PATH",
-    "SHIELD_XML",
+    "default_clearance_socket_path",
+    "serve",
 ]
 
 __version__ = "0.0.0"
@@ -53,8 +68,10 @@ _log = logging.getLogger(__name__)
 async def create_notifier(app_name: str = "terok") -> Notifier:
     """Return a connected ``DbusNotifier``, or a ``NullNotifier`` on failure.
 
-    This is the primary entry point. Callers get a working notifier without
-    caring whether a D-Bus session bus is available.
+    Thin convenience wrapper — calls :meth:`DbusNotifier.connect` and
+    falls through to :class:`NullNotifier` if no session bus is
+    reachable.  Unrelated to the clearance varlink transport; this one
+    is about desktop popups.
 
     Args:
         app_name: Application name sent with every notification.

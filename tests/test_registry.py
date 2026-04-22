@@ -85,13 +85,9 @@ class TestHandleNotify:
 
 
 class TestHandleServe:
-    """The serve handler wires up logging and delegates to ``_serve.serve``."""
+    """The serve handler delegates to ``_hub.serve`` (bootstraps its own logging)."""
 
-    async def test_configures_logging_and_awaits_serve(self) -> None:
-        with (
-            patch("terok_dbus._serve._configure_logging") as config,
-            patch("terok_dbus._serve.serve", new_callable=AsyncMock) as serve,
-        ):
+    async def test_awaits_serve(self) -> None:
+        with patch("terok_dbus._hub.serve", new_callable=AsyncMock) as serve:
             await _handle_serve()
-        config.assert_called_once()
         serve.assert_awaited_once()

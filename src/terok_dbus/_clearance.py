@@ -106,14 +106,14 @@ class _TerminalClearance:
         self._notifier.invoke_action(nid, action)
 
     async def run(self) -> None:
-        """Connect to D-Bus and run the interactive loop."""
-        from terok_dbus import EventSubscriber
+        """Connect to the clearance hub and run the interactive loop."""
+        from terok_dbus._subscriber import EventSubscriber
 
         subscriber = EventSubscriber(self._notifier)
         try:
             await subscriber.start()
         except Exception as exc:
-            print(f"D-Bus unavailable: {exc}", file=sys.stderr)  # noqa: T201
+            print(f"clearance hub unavailable: {exc}", file=sys.stderr)  # noqa: T201
             sys.exit(1)
 
         print("Shield clearance — listening on session bus")  # noqa: T201

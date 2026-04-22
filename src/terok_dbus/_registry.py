@@ -63,10 +63,9 @@ async def _handle_notify(*, summary: str, body: str = "", timeout: int = -1) -> 
 
 
 async def _handle_serve() -> None:
-    """Run the Shield1 hub service until SIGINT/SIGTERM."""
-    from terok_dbus._serve import _configure_logging, serve  # tach-ignore
+    """Run the clearance hub service until SIGINT/SIGTERM."""
+    from terok_dbus._hub import serve  # tach-ignore
 
-    _configure_logging()
     await serve()
 
 
@@ -129,7 +128,7 @@ COMMANDS: tuple[CommandDef, ...] = (
     ),
     CommandDef(
         name="serve",
-        help="Run the Shield1 clearance hub (owns org.terok.Shield1, forwards to desktop)",
+        help="Run the clearance hub (serves org.terok.Clearance1 varlink on a unix socket)",
         handler=_handle_serve,
     ),
     CommandDef(
