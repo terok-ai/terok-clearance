@@ -221,10 +221,19 @@ class ClearanceHub:
         self._fan_out(event)
 
     def _update_live_verdicts(self, event: ClearanceEvent) -> None:
-        """Maintain the authz-binding map in lockstep with the event stream."""
+        """Maintain the authz-binding map in lockstep with the event stream.
+
+        The bound ``dest`` is the "target" shield will actually operate
+        on — the domain when the reader resolved one via dnsmasq (shield
+        dispatches ``allow_domain`` on shape so future DNS rotations
+        track), else the raw IP.  Clients send the same value back as
+        ``Verdict.dest``; binding on anything else would force a
+        pointless translation pass on every verdict.
+        """
         if event.type == "connection_blocked" and event.request_id:
             self._live_verdicts[event.request_id] = _LiveVerdict(
-                container=event.container, dest=event.dest
+                container=event.container,
+                dest=event.domain or event.dest,
             )
         elif event.type in {"shield_down", "shield_down_all", "container_exited"}:
             # Stale blocks: verdicts on them would write into an allowlist
