@@ -124,10 +124,13 @@ def _uninstall_legacy() -> None:
 
 
 def _disable_and_unlink(unit_name: str) -> None:
-    """``systemctl --user disable --now <unit>`` + unlink — soft-fail on every step."""
+    """``systemctl --user disable --now <unit>`` + unlink — soft-fail on every step.
+
+    Always runs ``disable`` even when the unit file is already missing — an
+    operator who manually ``rm``'d the file can still have dangling
+    ``default.target.wants/`` symlinks that ``disable`` will clear.
+    """
     path = _user_systemd_dir() / unit_name
-    if not path.is_file():
-        return
     systemctl = shutil.which("systemctl")
     if systemctl:
         with contextlib.suppress(Exception):
@@ -243,8 +246,10 @@ def check_units_outdated() -> str | None:
 
     Checks both the hub and the verdict units.  ``None`` is returned
     when neither is installed (headless host, or ``terok setup``
-    hasn't run yet).  A legacy ``terok-dbus.service`` on disk counts
-    as "stale" so the operator is prompted to rerun setup and get
+    hasn't run yet); a one-sided pair (hub present, verdict absent or
+    vice-versa) is reported as stale so the operator is prompted to
+    restore the pair.  A legacy ``terok-dbus.service`` on disk counts
+    as "stale" too so the operator is prompted to rerun setup and get
     the split pair.
     """
     legacy = _user_systemd_dir() / _LEGACY_UNIT_NAME
@@ -253,10 +258,13 @@ def check_units_outdated() -> str | None:
             f"{_LEGACY_UNIT_NAME} is from a pre-split release — "
             "rerun `terok setup` to migrate to the hub/verdict pair."
         )
+    present: dict[str, bool] = {}
     for unit_name, marker in _UNITS:
         path = _user_systemd_dir() / unit_name
         if not path.is_file():
+            present[unit_name] = False
             continue
+        present[unit_name] = True
         installed = _version_for(unit_name, marker)
         if installed is None or installed < _UNIT_VERSION:
             installed_label = "unversioned" if installed is None else f"v{installed}"
@@ -264,4 +272,10 @@ def check_units_outdated() -> str | None:
                 f"{unit_name} is outdated "
                 f"(installed {installed_label}, expected v{_UNIT_VERSION}) — rerun `terok setup`."
             )
+    if any(present.values()) and not all(present.values()):
+        missing = ", ".join(name for name, is_present in present.items() if not is_present)
+        return (
+            f"half-installed: missing {missing} — rerun `terok setup` "
+            "to restore the hub/verdict pair."
+        )
     return None

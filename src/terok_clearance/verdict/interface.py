@@ -14,9 +14,13 @@ back.  Security-critical invariants stay on the hub side where
 their caller-trust story is easiest to audit.
 """
 
+import asyncio
+import logging
 from typing import TypedDict
 
 from asyncvarlink import VarlinkInterface, varlinkmethod
+
+_log = logging.getLogger(__name__)
 
 #: Interface name used for varlink dispatch and ``varlinkctl`` introspection.
 VERDICT_INTERFACE_NAME = "org.terok.ClearanceVerdict1"
@@ -50,7 +54,17 @@ class Verdict1Interface(VarlinkInterface, name=VERDICT_INTERFACE_NAME):
         The helper never raises — spawn failure, non-zero exit, and
         timeout all fold into ``ok=False`` with a reason string the
         hub re-raises to its own client as
-        :class:`~terok_clearance.wire.errors.ShieldCliFailed`.
+        :class:`~terok_clearance.wire.errors.ShieldCliFailed`.  Any
+        unexpected exception from the injected helper is caught here
+        too so it surfaces as a structured reply instead of a varlink
+        transport error on the hub side; ``CancelledError`` is always
+        re-raised so shutdown propagates cleanly.
         """
-        ok, stderr = await self._apply_verdict(container, dest, action)
-        return VerdictReply(ok=ok, stderr=stderr)
+        try:
+            ok, stderr = await self._apply_verdict(container, dest, action)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — contract: never leaks
+            _log.exception("unexpected verdict helper failure")
+            return VerdictReply(ok=False, stderr=f"internal verdict helper error: {exc}")
+        return VerdictReply(ok=bool(ok), stderr=str(stderr))

@@ -187,3 +187,34 @@ class TestUnitVersion:
         assert msg is not None
         assert "unversioned" in msg
         assert "terok setup" in msg
+
+    def test_check_outdated_flags_half_installed_pair(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Hub present + verdict missing → stale; operator must rerun setup."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        with patch.object(_install, "_daemon_reload"):
+            install_service(Path("/a/terok-clearance-hub"))
+        (tmp_path / "systemd" / "user" / VERDICT_UNIT_NAME).unlink()
+        msg = check_units_outdated()
+        assert msg is not None
+        assert VERDICT_UNIT_NAME in msg
+        assert "terok setup" in msg
+
+
+class TestDisableAndUnlink:
+    """``_disable_and_unlink`` clears enablement symlinks even without the file."""
+
+    def test_runs_disable_when_unit_file_already_missing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Dangling ``default.target.wants/`` symlinks survive a manual ``rm``."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        with (
+            patch.object(_install.shutil, "which", return_value="/bin/systemctl"),
+            patch.object(_install.subprocess, "run") as run,
+        ):
+            _install._disable_and_unlink(HUB_UNIT_NAME)
+        assert run.call_count == 1
+        assert "disable" in run.call_args.args[0]
+        assert HUB_UNIT_NAME in run.call_args.args[0]
