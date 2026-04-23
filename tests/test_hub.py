@@ -15,8 +15,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from terok_dbus._hub import ClearanceHub, _translate_reader_event
-from terok_dbus._wire import (
+from terok_clearance._hub import ClearanceHub, _translate_reader_event
+from terok_clearance._wire import (
     ClearanceEvent,
     InvalidAction,
     ShieldCliFailed,
@@ -401,9 +401,9 @@ class TestStartRollback:
         hub = _hub()
         ingester = AsyncMock()
         with (
-            patch("terok_dbus._hub.EventIngester", return_value=ingester),
+            patch("terok_clearance._hub.EventIngester", return_value=ingester),
             patch(
-                "terok_dbus._unix_socket.bind_hardened",
+                "terok_clearance._unix_socket.bind_hardened",
                 side_effect=OSError("simulated bind failure"),
             ),
         ):

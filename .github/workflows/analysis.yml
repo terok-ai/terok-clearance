@@ -15,7 +15,7 @@ jobs:
   # privileged workflow_run-based Sonar scan can analyze fork PRs safely.
   unit-tests:
     name: Unit tests
-    if: github.repository == 'terok-ai/terok-dbus'
+    if: github.repository == 'terok-ai/terok-clearance'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -103,7 +103,7 @@ jobs:
   # matrix is operated separately on self-hosted infrastructure.
   integration-tests:
     name: Integration tests
-    if: github.repository == 'terok-ai/terok-dbus'
+    if: github.repository == 'terok-ai/terok-clearance'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -150,7 +150,7 @@ jobs:
   # and so Sonar can import their JSON reports without hiding them inside a unit-test job.
   ruff:
     name: Ruff
-    if: github.repository == 'terok-ai/terok-dbus'
+    if: github.repository == 'terok-ai/terok-clearance'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -172,7 +172,7 @@ jobs:
 
   bandit:
     name: Bandit
-    if: github.repository == 'terok-ai/terok-dbus'
+    if: github.repository == 'terok-ai/terok-clearance'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -189,7 +189,7 @@ jobs:
         run: mkdir -p reports
 
       - name: Write Bandit report
-        run: bandit -r src/terok_dbus/ --exit-zero -f json -o reports/bandit-report.json
+        run: bandit -r src/terok_clearance/ --exit-zero -f json -o reports/bandit-report.json
 
       - name: Upload Bandit report
         uses: actions/upload-artifact@v7
@@ -203,7 +203,7 @@ jobs:
   # artifacts uploaded above, because GitHub does not expose secrets to fork PR runs.
   sonar:
     name: SonarQube Cloud
-    if: github.repository == 'terok-ai/terok-dbus' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+    if: github.repository == 'terok-ai/terok-clearance' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
     needs: [unit-tests, ruff, bandit]
     runs-on: ubuntu-latest
     steps:

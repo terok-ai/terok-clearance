@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from terok_dbus._notifier import DbusNotifier
+from terok_clearance._notifier import DbusNotifier
 
 
 def _mock_bus() -> MagicMock:
@@ -39,7 +39,7 @@ class TestDbusNotifierConnect:
     """Connection lifecycle tests."""
 
     async def test_lazy_connect_on_first_notify(self, mock_bus: MagicMock):
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier("test-app")
             assert notifier._conn is None
             await notifier.notify("hello")
@@ -47,7 +47,7 @@ class TestDbusNotifierConnect:
             assert notifier._conn.bus is mock_bus
 
     async def test_connect_subscribes_to_signals(self, mock_bus: MagicMock):
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             await notifier.connect()
             iface = mock_bus.get_proxy_object.return_value.get_interface.return_value
@@ -55,7 +55,7 @@ class TestDbusNotifierConnect:
             iface.on_notification_closed.assert_called_once_with(notifier._handle_closed)
 
     async def test_disconnect_clears_state(self, mock_bus: MagicMock):
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             await notifier.connect()
             await notifier.disconnect()
@@ -63,7 +63,7 @@ class TestDbusNotifierConnect:
             assert notifier._callbacks == {}
 
     async def test_disconnect_unsubscribes_signals(self, mock_bus: MagicMock):
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             await notifier.connect()
             iface = mock_bus.get_proxy_object.return_value.get_interface.return_value
@@ -73,7 +73,7 @@ class TestDbusNotifierConnect:
 
     async def test_connect_failure_disconnects_bus(self, mock_bus: MagicMock):
         mock_bus.introspect = AsyncMock(side_effect=RuntimeError("boom"))
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             with pytest.raises(RuntimeError, match="boom"):
                 await notifier.connect()
@@ -82,7 +82,7 @@ class TestDbusNotifierConnect:
 
     async def test_connect_and_notify_share_the_lock(self, mock_bus: MagicMock):
         """A ``connect()`` + ``notify()`` race must produce exactly one MessageBus."""
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus) as cls:
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus) as cls:
             notifier = DbusNotifier()
             await asyncio.gather(notifier.connect(), notifier.notify("hi"))
         assert cls.call_count == 1
@@ -93,9 +93,9 @@ class TestDbusNotifierNotify:
     """Notification sending tests."""
 
     async def test_notify_passes_correct_args(self, mock_bus: MagicMock):
-        from terok_dbus._notifier import _DEFAULT_APP_ICON
+        from terok_clearance._notifier import _DEFAULT_APP_ICON
 
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier("myapp")
             nid = await notifier.notify("Title", "Body", timeout_ms=5000)
             assert nid == 7
@@ -115,7 +115,7 @@ class TestDbusNotifierNotify:
             )
 
     async def test_notify_passes_hints_replaces_id_app_icon(self, mock_bus: MagicMock):
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier("myapp")
             hints = {"urgency": "mock_variant", "resident": "mock_bool"}
             await notifier.notify(
@@ -131,7 +131,7 @@ class TestDbusNotifierNotify:
             assert call_args[6] == {"urgency": "mock_variant", "resident": "mock_bool"}
 
     async def test_notify_flattens_actions(self, mock_bus: MagicMock):
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             await notifier.notify("t", actions=[("allow", "Allow"), ("deny", "Deny")])
             iface = mock_bus.get_proxy_object.return_value.get_interface.return_value
@@ -139,21 +139,21 @@ class TestDbusNotifierNotify:
             assert call_args[0][5] == ["allow", "Allow", "deny", "Deny"]
 
     async def test_second_notify_reuses_connection(self, mock_bus: MagicMock):
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             await notifier.notify("a")
             await notifier.notify("b")
             mock_bus.connect.assert_awaited_once()
 
     async def test_concurrent_notify_connects_once(self, mock_bus: MagicMock):
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             await asyncio.gather(notifier.notify("a"), notifier.notify("b"))
             mock_bus.connect.assert_awaited_once()
 
     async def test_explicit_app_icon_wins_over_default(self, mock_bus: MagicMock):
         """Callers supplying ``app_icon`` keep their choice; the logo is a fallback."""
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             await notifier.notify("Title", app_icon="dialog-warning")
             iface = mock_bus.get_proxy_object.return_value.get_interface.return_value
@@ -163,7 +163,7 @@ class TestDbusNotifierNotify:
         """The fallback icon resolves to a real on-disk ``terok-logo.png``."""
         from pathlib import Path
 
-        from terok_dbus._notifier import _DEFAULT_APP_ICON, _LOGO_PATH
+        from terok_clearance._notifier import _DEFAULT_APP_ICON, _LOGO_PATH
 
         assert _LOGO_PATH.is_file(), f"packaged logo missing at {_LOGO_PATH}"
         assert _DEFAULT_APP_ICON.startswith("file://")
@@ -174,14 +174,14 @@ class TestDbusNotifierActions:
     """Action callback dispatch tests."""
 
     async def test_on_action_registers_callback(self, mock_bus: MagicMock):
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             cb = MagicMock()
             await notifier.on_action(7, cb)
             assert 7 in notifier._callbacks
 
     async def test_handle_action_dispatches(self, mock_bus: MagicMock):
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             cb = MagicMock()
             await notifier.on_action(7, cb)
@@ -189,19 +189,19 @@ class TestDbusNotifierActions:
             cb.assert_called_once_with("allow")
 
     async def test_handle_action_ignores_unknown_id(self, mock_bus: MagicMock):
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             notifier._handle_action(999, "allow")  # should not raise
 
     async def test_handle_closed_removes_callback(self, mock_bus: MagicMock):
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             await notifier.on_action(7, MagicMock())
             notifier._handle_closed(7, 1)
             assert 7 not in notifier._callbacks
 
     async def test_close_removes_callback_and_calls_dbus(self, mock_bus: MagicMock):
-        with patch("terok_dbus._notifier.MessageBus", return_value=mock_bus):
+        with patch("terok_clearance._notifier.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             await notifier.connect()
             await notifier.on_action(7, MagicMock())

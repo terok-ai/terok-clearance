@@ -37,7 +37,7 @@ _SOCKET_BASENAME = "terok-shield-events.sock"
 
 def default_socket_path() -> Path:
     """Return the canonical ingester path under ``$XDG_RUNTIME_DIR``."""
-    from terok_dbus._unix_socket import runtime_socket_path
+    from terok_clearance._unix_socket import runtime_socket_path
 
     return runtime_socket_path(_SOCKET_BASENAME)
 
@@ -74,7 +74,7 @@ class EventIngester:
 
     async def start(self) -> None:
         """Bind the socket and start accepting connections in the background."""
-        from terok_dbus._unix_socket import bind_hardened
+        from terok_clearance._unix_socket import bind_hardened
 
         async def _factory(path: str) -> asyncio.AbstractServer:
             return await asyncio.start_unix_server(self._handle_client, path=path)

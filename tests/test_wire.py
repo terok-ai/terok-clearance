@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from terok_dbus._wire import (
+from terok_clearance._wire import (
     CLEARANCE_INTERFACE_NAME,
     Clearance1Interface,
     ClearanceEvent,

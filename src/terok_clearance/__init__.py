@@ -20,17 +20,17 @@ import logging
 
 from dbus_fast import DBusError
 
-from terok_dbus._callback import CallbackNotifier, Notification
-from terok_dbus._client import ClearanceClient
-from terok_dbus._hub import ClearanceHub, default_clearance_socket_path, serve
-from terok_dbus._identity import ContainerIdentity
-from terok_dbus._install import check_units_outdated, read_installed_unit_version
-from terok_dbus._notifier import DbusNotifier
-from terok_dbus._null import NullNotifier
-from terok_dbus._protocol import Notifier
-from terok_dbus._service import configure_logging, wait_for_shutdown_signal
-from terok_dbus._subscriber import EventSubscriber
-from terok_dbus._wire import (
+from terok_clearance._callback import CallbackNotifier, Notification
+from terok_clearance._client import ClearanceClient
+from terok_clearance._hub import ClearanceHub, default_clearance_socket_path, serve
+from terok_clearance._identity import ContainerIdentity
+from terok_clearance._install import check_units_outdated, read_installed_unit_version
+from terok_clearance._notifier import DbusNotifier
+from terok_clearance._null import NullNotifier
+from terok_clearance._protocol import Notifier
+from terok_clearance._service import configure_logging, wait_for_shutdown_signal
+from terok_clearance._subscriber import EventSubscriber
+from terok_clearance._wire import (
     CLEARANCE_INTERFACE_NAME,
     Clearance1Interface,
     ClearanceEvent,

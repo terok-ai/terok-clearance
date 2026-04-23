@@ -11,7 +11,7 @@ from typing import Any
 
 from dbus_fast.aio import MessageBus
 
-from terok_dbus._constants import BUS_NAME, INTERFACE_NAME, OBJECT_PATH
+from terok_clearance._constants import BUS_NAME, INTERFACE_NAME, OBJECT_PATH
 
 # ``Path(__file__)`` can be relative under editable installs or alternative
 # loaders; ``resolve()`` before ``as_uri()`` because the latter rejects
@@ -115,7 +115,7 @@ class DbusNotifier:
         terok task triple) are dropped on the floor here — callers are
         expected to have folded the user-facing identity into ``body``
         already.  The kwargs stay in the signature for
-        :class:`~terok_dbus._protocol.Notifier` conformance so callers
+        :class:`~terok_clearance._protocol.Notifier` conformance so callers
         don't have to branch on notifier kind.
         """
         await self.connect()

@@ -1,8 +1,8 @@
-site_name: terok-dbus
+site_name: terok-clearance
 site_description: D-Bus desktop notification package for terok
-site_url: https://terok-ai.github.io/terok-dbus
-repo_url: https://github.com/terok-ai/terok-dbus
-repo_name: terok-ai/terok-dbus
+site_url: https://terok-ai.github.io/terok-clearance
+repo_url: https://github.com/terok-ai/terok-clearance
+repo_name: terok-ai/terok-clearance
 
 theme:
   name: material
@@ -89,7 +89,7 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/terok-ai/terok-dbus
+      link: https://github.com/terok-ai/terok-clearance
 
 extra_css:
   - https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&family=Ubuntu+Mono:wght@400;700&display=swap

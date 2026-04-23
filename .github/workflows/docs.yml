@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   build:
-    if: github.repository == 'terok-ai/terok-dbus'
+    if: github.repository == 'terok-ai/terok-clearance'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -54,7 +54,7 @@ jobs:
       - name: Fetch Codecov coverage treemap
         run: |
           mkdir -p docs/assets
-          curl -sfL "https://codecov.io/gh/terok-ai/terok-dbus/graphs/tree.svg" \
+          curl -sfL "https://codecov.io/gh/terok-ai/terok-clearance/graphs/tree.svg" \
             > docs/assets/coverage_treemap.svg || true
           [ -s docs/assets/coverage_treemap.svg ] || rm -f docs/assets/coverage_treemap.svg
 

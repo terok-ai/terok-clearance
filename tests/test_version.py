@@ -3,11 +3,11 @@
 
 """Smoke test — verify the package is importable."""
 
-import terok_dbus
+import terok_clearance
 
 
 def test_package_is_importable():
-    """The terok_dbus package should be importable and expose __version__."""
-    assert hasattr(terok_dbus, "__version__")
-    assert isinstance(terok_dbus.__version__, str)
-    assert terok_dbus.__version__.strip(), "__version__ should be non-empty"
+    """The terok_clearance package should be importable and expose __version__."""
+    assert hasattr(terok_clearance, "__version__")
+    assert isinstance(terok_clearance.__version__, str)
+    assert terok_clearance.__version__.strip(), "__version__ should be non-empty"

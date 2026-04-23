@@ -3,17 +3,17 @@
 #
 # terok-dbus-version: {{UNIT_VERSION}}
 #
-# systemd user service for the terok-dbus Shield1 clearance hub.
+# systemd user service for the terok-clearance Shield1 clearance hub.
 #
 # The {{BIN}} placeholder is resolved at install time by the install
-# command (e.g. via sys.executable -m terok_dbus._cli) so the unit
+# command (e.g. via sys.executable -m terok_clearance._cli) so the unit
 # works regardless of PATH — matching the pattern used by
 # terok-credential-proxy and terok-gate.
 #
 # Install:
-#   terok-dbus install-service
+#   terok-clearance-hub install-service
 #   — or manually —
-#   sed "s|{{BIN}}|$(which terok-dbus)|" contrib/systemd/terok-dbus.service \
+#   sed "s|{{BIN}}|$(which terok-clearance-hub)|" contrib/systemd/terok-dbus.service \
 #       > ~/.config/systemd/user/terok-dbus.service
 #   systemctl --user daemon-reload
 #   systemctl --user enable --now terok-dbus
@@ -23,7 +23,7 @@
 
 [Unit]
 Description=terok Shield1 clearance hub (verdict dispatcher + desktop notifier)
-Documentation=https://github.com/terok-ai/terok-dbus
+Documentation=https://github.com/terok-ai/terok-clearance
 After=dbus.socket
 Requires=dbus.socket
 
@@ -94,7 +94,7 @@ RestartSec=5
 # *it* doesn't exec podman.  Don't attempt partial hardening here;
 # tracked follow-up:
 #
-#   • Hub/verdict-helper split .... terok-ai/terok-dbus#48
+#   • Hub/verdict-helper split .... terok-ai/terok-clearance#48
 #   • Vault / gate hardening ...... terok-ai/terok-sandbox#188
 #     (independent of the split — gates the hub's hardening only)
 

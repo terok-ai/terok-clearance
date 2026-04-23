@@ -26,7 +26,7 @@ format:
 # Run unit tests with coverage (excludes integration tests)
 test-unit:
 	mkdir -p $(REPORTS_DIR)
-	poetry run pytest tests/ --ignore=tests/integration --cov=terok_dbus --cov-report=term-missing --cov-report=xml:$(COVERAGE_XML) --junitxml=$(UNIT_JUNIT_XML) -o junit_family=legacy
+	poetry run pytest tests/ --ignore=tests/integration --cov=terok_clearance --cov-report=term-missing --cov-report=xml:$(COVERAGE_XML) --junitxml=$(UNIT_JUNIT_XML) -o junit_family=legacy
 	@echo "NOTE: Target 95%+ test coverage."
 
 # Run integration tests (requires D-Bus session bus + dunst)
@@ -46,7 +46,7 @@ ruff-report:
 # Write Bandit's JSON report without failing on findings.
 bandit-report:
 	mkdir -p $(REPORTS_DIR)
-	poetry run bandit -r src/terok_dbus/ --exit-zero -f json -o $(BANDIT_REPORT)
+	poetry run bandit -r src/terok_clearance/ --exit-zero -f json -o $(BANDIT_REPORT)
 
 # Generate the files SonarQube Cloud imports from reports/.
 sonar-inputs: test-unit ruff-report bandit-report
@@ -58,20 +58,20 @@ tach:
 # Run SAST security scan
 security:
 	mkdir -p $(REPORTS_DIR)
-	poetry run bandit -r src/terok_dbus/ --exit-zero -f json -o $(BANDIT_REPORT)
-	poetry run bandit -r src/terok_dbus/ -ll
+	poetry run bandit -r src/terok_clearance/ --exit-zero -f json -o $(BANDIT_REPORT)
+	poetry run bandit -r src/terok_clearance/ -ll
 
 # Check docstring coverage (minimum 95%)
 docstrings:
-	poetry run docstr-coverage src/terok_dbus/ --fail-under=95
+	poetry run docstr-coverage src/terok_clearance/ --fail-under=95
 
 # Check cognitive complexity (advisory — lists functions exceeding threshold)
 complexity:
-	poetry run complexipy src/terok_dbus/ --max-complexity-allowed 15 --failed; true
+	poetry run complexipy src/terok_clearance/ --max-complexity-allowed 15 --failed; true
 
 # Find dead code (cross-file, min 80% confidence)
 deadcode:
-	poetry run vulture src/terok_dbus/ vulture_whitelist.py --min-confidence 80
+	poetry run vulture src/terok_clearance/ vulture_whitelist.py --min-confidence 80
 
 # Check REUSE (SPDX license/copyright) compliance
 reuse:
@@ -80,10 +80,10 @@ reuse:
 
 # Add SPDX header to files.
 # NAME must be the real name of the person responsible for creating the file (not a project name).
-# Example: make spdx NAME="Jiri Vyskocil" FILES="src/terok_dbus/foo.py"
+# Example: make spdx NAME="Jiri Vyskocil" FILES="src/terok_clearance/foo.py"
 spdx:
 ifndef NAME
-	$(error NAME is required — use the real name of the copyright holder, e.g. make spdx NAME="Jiri Vyskocil" FILES="src/terok_dbus/foo.py")
+	$(error NAME is required — use the real name of the copyright holder, e.g. make spdx NAME="Jiri Vyskocil" FILES="src/terok_clearance/foo.py")
 endif
 	poetry run reuse annotate --template compact --copyright "$(NAME)" --license Apache-2.0 $(FILES)
 

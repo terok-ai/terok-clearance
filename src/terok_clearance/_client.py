@@ -26,7 +26,7 @@ from pathlib import Path
 from asyncvarlink import VarlinkClientProtocol, connect_unix_varlink
 from asyncvarlink.error import VarlinkErrorReply
 
-from terok_dbus._wire import Clearance1Interface, ClearanceEvent, default_clearance_socket_path
+from terok_clearance._wire import Clearance1Interface, ClearanceEvent, default_clearance_socket_path
 
 _log = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ class ClearanceClient:
         hub that's down at startup still propagates as an exception.
         Subsequent drops are handled by :meth:`_run_stream`'s internal
         reconnect loop so long-running consumers (TUI, notifier)
-        survive a ``systemctl restart terok-dbus`` without
+        survive a ``systemctl restart terok-clearance`` without
         restarting themselves.
         """
         self._on_event = on_event

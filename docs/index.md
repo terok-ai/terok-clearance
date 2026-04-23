@@ -1,10 +1,10 @@
-# terok-dbus
+# terok-clearance
 
 D-Bus desktop notification package for the terok clearance system.
 
 ## What it does
 
-terok-dbus wraps the [freedesktop Notifications](https://specifications.freedesktop.org/notification-spec/latest/) D-Bus interface via [`dbus-fast`](https://github.com/Bluetooth-Devices/dbus-fast), providing an async-first Python API for desktop notifications with action buttons.
+terok-clearance wraps the [freedesktop Notifications](https://specifications.freedesktop.org/notification-spec/latest/) D-Bus interface via [`dbus-fast`](https://github.com/Bluetooth-Devices/dbus-fast), providing an async-first Python API for desktop notifications with action buttons.
 
 ### Key properties
 
@@ -19,14 +19,14 @@ terok-dbus wraps the [freedesktop Notifications](https://specifications.freedesk
 ### Install
 
 ```bash
-pip install terok-dbus
+pip install terok-clearance
 ```
 
 ### Send a notification
 
 ```python
 import asyncio
-from terok_dbus import create_notifier
+from terok_clearance import create_notifier
 
 async def main():
     notifier = await create_notifier(app_name="terok")
@@ -53,7 +53,7 @@ asyncio.run(main())
 ### CLI tool (development / testing)
 
 ```bash
-terok-dbus-notify "Title" "Body" --actions allow:Allow deny:Deny --wait
+terok-clearance-notify "Title" "Body" --actions allow:Allow deny:Deny --wait
 ```
 
 ## API preview

@@ -5,7 +5,7 @@
 
 import pytest
 
-from terok_dbus._null import NullNotifier
+from terok_clearance._null import NullNotifier
 
 
 @pytest.fixture

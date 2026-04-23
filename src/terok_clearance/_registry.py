@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Command registry for terok-dbus.
+"""Command registry for terok-clearance.
 
 Provides :class:`CommandDef` and :class:`ArgDef` dataclasses describing
-every ``terok-dbus`` subcommand.  The ``COMMANDS`` tuple is the single
+every ``terok-clearance`` subcommand.  The ``COMMANDS`` tuple is the single
 source of truth consumed by both the standalone CLI and the terok
 integration layer (``terok dbus …``).
 
@@ -32,7 +32,7 @@ class ArgDef:
 
 @dataclass(frozen=True)
 class CommandDef:
-    """Definition of a terok-dbus subcommand.
+    """Definition of a terok-clearance subcommand.
 
     Attributes:
         name: Subcommand name (e.g. ``"notify"``).
@@ -52,7 +52,7 @@ class CommandDef:
 
 async def _handle_notify(*, summary: str, body: str = "", timeout: int = -1) -> None:
     """Send a one-shot desktop notification and print its ID."""
-    from terok_dbus import create_notifier  # tach-ignore
+    from terok_clearance import create_notifier  # tach-ignore
 
     notifier = await create_notifier()
     try:
@@ -64,13 +64,13 @@ async def _handle_notify(*, summary: str, body: str = "", timeout: int = -1) -> 
 
 async def _handle_serve() -> None:
     """Run the clearance hub service until SIGINT/SIGTERM."""
-    from terok_dbus._hub import serve  # tach-ignore
+    from terok_clearance._hub import serve  # tach-ignore
 
     await serve()
 
 
 async def _handle_install_service(*, bin_path: str | None = None) -> None:  # NOSONAR S7503
-    """Install the terok-dbus systemd user unit and reload the user daemon.
+    """Install the terok-clearance systemd user unit and reload the user daemon.
 
     ``async`` is structural, not semantic: every CommandDef.handler goes
     through ``asyncio.run(handler(**kwargs))`` in ``_cli.py``.  Sonar's
@@ -82,13 +82,15 @@ async def _handle_install_service(*, bin_path: str | None = None) -> None:  # NO
     import sys
     from pathlib import Path as _Path
 
-    from terok_dbus._install import install_service  # tach-ignore
+    from terok_clearance._install import install_service  # tach-ignore
 
     if bin_path is not None and not bin_path:
         raise SystemExit("install-service: --bin-path cannot be empty")
-    discovered = bin_path or shutil.which("terok-dbus")
+    discovered = bin_path or shutil.which("terok-clearance-hub")
     resolved: _Path | list[str] = (
-        _Path(discovered) if discovered is not None else [sys.executable, "-m", "terok_dbus._cli"]
+        _Path(discovered)
+        if discovered is not None
+        else [sys.executable, "-m", "terok_clearance._cli"]
     )
     dest = install_service(resolved)
     print(f"Installed {dest}")  # noqa: T201
@@ -102,7 +104,7 @@ async def _handle_install_service(*, bin_path: str | None = None) -> None:  # NO
 
 async def _handle_clearance() -> None:
     """Run the interactive terminal clearance tool."""
-    from terok_dbus._clearance import run_clearance  # tach-ignore
+    from terok_clearance._clearance import run_clearance  # tach-ignore
 
     await run_clearance()
 
@@ -133,13 +135,13 @@ COMMANDS: tuple[CommandDef, ...] = (
     ),
     CommandDef(
         name="install-service",
-        help="Install the terok-dbus systemd user unit (systemctl --user daemon-reload'd)",
+        help="Install the terok-clearance systemd user unit (systemctl --user daemon-reload'd)",
         handler=_handle_install_service,
         args=(
             ArgDef(
                 name="--bin-path",
                 dest="bin_path",
-                help="Override the resolved terok-dbus launcher path",
+                help="Override the resolved terok-clearance-hub launcher path",
             ),
         ),
     ),

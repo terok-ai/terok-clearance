@@ -19,7 +19,7 @@ import logging
 import signal
 import sys
 
-from terok_dbus._callback import CallbackNotifier, Notification
+from terok_clearance._callback import CallbackNotifier, Notification
 
 _log = logging.getLogger(__name__)
 
@@ -107,7 +107,7 @@ class _TerminalClearance:
 
     async def run(self) -> None:
         """Connect to the clearance hub and run the interactive loop."""
-        from terok_dbus._subscriber import EventSubscriber
+        from terok_clearance._subscriber import EventSubscriber
 
         subscriber = EventSubscriber(self._notifier)
         try:

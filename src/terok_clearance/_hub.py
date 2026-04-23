@@ -32,8 +32,8 @@ from pathlib import Path
 from asyncvarlink import VarlinkInterfaceRegistry, create_unix_server
 from asyncvarlink.serviceinterface import VarlinkServiceInterface
 
-from terok_dbus._event_ingester import EventIngester
-from terok_dbus._wire import (
+from terok_clearance._event_ingester import EventIngester
+from terok_clearance._wire import (
     Clearance1Interface,
     ClearanceEvent,
     InvalidAction,
@@ -144,14 +144,14 @@ class ClearanceHub:
             registry.register_interface(
                 VarlinkServiceInterface(
                     vendor="terok",
-                    product="terok-dbus",
+                    product="terok-clearance",
                     version=_own_version(),
-                    url="https://github.com/terok-ai/terok-dbus",
+                    url="https://github.com/terok-ai/terok-clearance",
                     registry=registry,
                 )
             )
 
-            from terok_dbus._unix_socket import bind_hardened
+            from terok_clearance._unix_socket import bind_hardened
 
             async def _factory(path: str) -> object:
                 return await create_unix_server(registry.protocol_factory, path=path)
@@ -425,14 +425,14 @@ def _own_version() -> str:
     try:
         from importlib.metadata import version
 
-        return version("terok-dbus")
+        return version("terok-clearance")
     except Exception:  # pragma: no cover — only hits if metadata is missing
         return "0.0.0"
 
 
 def _default_reader_socket() -> Path:
     """The EventIngester's default path, re-derived for the hub's wiring."""
-    from terok_dbus._event_ingester import default_socket_path
+    from terok_clearance._event_ingester import default_socket_path
 
     return default_socket_path()
 
@@ -443,11 +443,11 @@ def _default_reader_socket() -> Path:
 async def serve() -> None:  # pragma: no cover — integration path
     """Run the hub service until SIGINT/SIGTERM.
 
-    The entry point ``terok-dbus serve`` hands off here.  Blocks forever
+    The entry point ``terok-clearance serve`` hands off here.  Blocks forever
     on a signal-set :class:`asyncio.Event`; systemd's SIGTERM flips it,
     then :meth:`stop` tears down the server under a timeout.
     """
-    from terok_dbus._service import configure_logging, wait_for_shutdown_signal
+    from terok_clearance._service import configure_logging, wait_for_shutdown_signal
 
     configure_logging()
     hub = ClearanceHub()

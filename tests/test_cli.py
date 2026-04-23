@@ -1,14 +1,14 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the terok-dbus CLI — subcommand parsing and dispatch."""
+"""Tests for the terok-clearance CLI — subcommand parsing and dispatch."""
 
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from terok_dbus._cli import _build_parser, main
-from terok_dbus._registry import COMMANDS, CommandDef
+from terok_clearance._cli import _build_parser, main
+from terok_clearance._registry import COMMANDS, CommandDef
 
 
 class TestNotifyParser:
@@ -59,12 +59,12 @@ class TestInstallServiceParser:
 
     def test_bin_path_flag(self) -> None:
         parser = _build_parser()
-        args = parser.parse_args(["install-service", "--bin-path", "/opt/terok-dbus"])
-        assert args.bin_path == "/opt/terok-dbus"
+        args = parser.parse_args(["install-service", "--bin-path", "/opt/terok-clearance"])
+        assert args.bin_path == "/opt/terok-clearance"
 
 
 class TestInstallServiceDispatch:
-    """Dispatch tests for ``terok-dbus install-service``."""
+    """Dispatch tests for ``terok-clearance-hub install-service``."""
 
     def test_install_service_calls_install(self, tmp_path, monkeypatch) -> None:
         """``install-service`` resolves BIN and writes the unit via ``install_service``."""
@@ -74,11 +74,11 @@ class TestInstallServiceDispatch:
             unit_path.write_text(f"ExecStart={bin_path}\n")
             return unit_path
 
-        monkeypatch.setattr("terok_dbus._install.install_service", _fake_install)
-        monkeypatch.setattr("shutil.which", lambda _name: "/opt/terok-dbus")
-        with patch("sys.argv", ["terok-dbus", "install-service"]):
+        monkeypatch.setattr("terok_clearance._install.install_service", _fake_install)
+        monkeypatch.setattr("shutil.which", lambda _name: "/opt/terok-clearance")
+        with patch("sys.argv", ["terok-clearance", "install-service"]):
             main()
-        assert unit_path.read_text().startswith("ExecStart=/opt/terok-dbus")
+        assert unit_path.read_text().startswith("ExecStart=/opt/terok-clearance")
 
     def test_install_service_respects_explicit_bin_path(self, tmp_path, monkeypatch) -> None:
         seen: dict[str, str] = {}
@@ -87,8 +87,8 @@ class TestInstallServiceDispatch:
             seen["bin_path"] = str(bin_path)
             return tmp_path / "terok-dbus.service"
 
-        monkeypatch.setattr("terok_dbus._install.install_service", _fake_install)
-        with patch("sys.argv", ["terok-dbus", "install-service", "--bin-path", "/custom/bin"]):
+        monkeypatch.setattr("terok_clearance._install.install_service", _fake_install)
+        with patch("sys.argv", ["terok-clearance", "install-service", "--bin-path", "/custom/bin"]):
             main()
         assert seen["bin_path"] == "/custom/bin"
 
@@ -98,33 +98,33 @@ class TestInstallServiceDispatch:
         def _fake_install(bin_path):
             raise AssertionError("install_service must not be called on empty --bin-path")
 
-        monkeypatch.setattr("terok_dbus._install.install_service", _fake_install)
+        monkeypatch.setattr("terok_clearance._install.install_service", _fake_install)
         with (
-            patch("sys.argv", ["terok-dbus", "install-service", "--bin-path", ""]),
+            patch("sys.argv", ["terok-clearance", "install-service", "--bin-path", ""]),
             pytest.raises(SystemExit),
         ):
             main()
 
 
 class TestNoSubcommand:
-    """Bare ``terok-dbus`` with no subcommand."""
+    """Bare ``terok-clearance`` with no subcommand."""
 
     def test_exits_with_code_2(self):
-        with patch("sys.argv", ["terok-dbus"]):
+        with patch("sys.argv", ["terok-clearance"]):
             with pytest.raises(SystemExit, match="2"):
                 main()
 
 
 class TestNotifyDispatch:
-    """Dispatch tests for ``terok-dbus notify``."""
+    """Dispatch tests for ``terok-clearance notify``."""
 
     def test_notify_sends_notification(self):
         mock_notifier = AsyncMock()
         mock_notifier.notify.return_value = 42
 
         with (
-            patch("terok_dbus.create_notifier", new_callable=AsyncMock) as mock_factory,
-            patch("sys.argv", ["terok-dbus", "notify", "Test", "Body"]),
+            patch("terok_clearance.create_notifier", new_callable=AsyncMock) as mock_factory,
+            patch("sys.argv", ["terok-clearance", "notify", "Test", "Body"]),
         ):
             mock_factory.return_value = mock_notifier
             main()
@@ -145,15 +145,15 @@ class TestKeyboardInterrupt:
         )
 
         with (
-            patch("terok_dbus._cli.COMMANDS", mock_commands),
-            patch("sys.argv", ["terok-dbus", "notify", "Hi"]),
+            patch("terok_clearance._cli.COMMANDS", mock_commands),
+            patch("sys.argv", ["terok-clearance", "notify", "Hi"]),
         ):
             with pytest.raises(SystemExit, match="130"):
                 main()
 
 
 class TestServeDispatch:
-    """Dispatch tests for ``terok-dbus serve``."""
+    """Dispatch tests for ``terok-clearance serve``."""
 
     def test_serve_dispatches_to_handler(self) -> None:
         mock_handler = AsyncMock()
@@ -163,8 +163,8 @@ class TestServeDispatch:
         )
 
         with (
-            patch("terok_dbus._cli.COMMANDS", mock_commands),
-            patch("sys.argv", ["terok-dbus", "serve"]),
+            patch("terok_clearance._cli.COMMANDS", mock_commands),
+            patch("sys.argv", ["terok-clearance", "serve"]),
         ):
             main()
             mock_handler.assert_awaited_once()

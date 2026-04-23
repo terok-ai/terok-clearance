@@ -26,8 +26,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from terok_dbus._client import ClearanceClient
-from terok_dbus._hub import ClearanceHub
+from terok_clearance._client import ClearanceClient
+from terok_clearance._hub import ClearanceHub
 
 from .conftest import CONTAINER, DEST_IP, DOMAIN
 
@@ -370,7 +370,7 @@ async def test_event_callback_exception_is_logged_but_stream_survives(
 @pytest.mark.asyncio
 async def test_start_rollback_on_partial_connect_failure(tmp_path: Path) -> None:
     """If the second transport dial fails, no live socket leaks behind."""
-    import terok_dbus._client as client_mod
+    import terok_clearance._client as client_mod
 
     sock = tmp_path / "clearance.sock"
     first_transport = None

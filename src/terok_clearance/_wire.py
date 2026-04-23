@@ -22,7 +22,7 @@ from pathlib import Path
 
 from asyncvarlink import TypedVarlinkErrorReply, VarlinkInterface, varlinkmethod
 
-from terok_dbus._unix_socket import runtime_socket_path
+from terok_clearance._unix_socket import runtime_socket_path
 
 #: Interface name used for varlink dispatch and ``varlinkctl`` introspection.
 #: The transport is a plain unix socket (no D-Bus daemon in the loop); the

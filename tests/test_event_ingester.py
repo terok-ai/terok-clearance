@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from terok_dbus._event_ingester import EventIngester
+from terok_clearance._event_ingester import EventIngester
 
 
 async def _connect_and_send(path: Path, payload: bytes) -> None:
@@ -158,7 +158,9 @@ class TestEventIngester:
         ingester = EventIngester(socket_path=socket_path, on_event=sink)
         await ingester.start()
         try:
-            with patch("terok_dbus._event_ingester._peer_uid_matches_ours", return_value=False):
+            with patch(
+                "terok_clearance._event_ingester._peer_uid_matches_ours", return_value=False
+            ):
                 await _connect_and_send(
                     socket_path,
                     (json.dumps({"type": "container_started", "container": "c"}) + "\n").encode(),

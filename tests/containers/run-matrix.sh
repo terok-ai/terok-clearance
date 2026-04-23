@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 #
-# Multi-distro integration test runner for terok-dbus.
+# Multi-distro integration test runner for terok-clearance.
 #
 # Builds test containers for each target distro and runs the
 # unit + integration test suite inside them.  Each container
@@ -18,7 +18,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-IMAGE_PREFIX="terok-dbus-test"
+IMAGE_PREFIX="terok-clearance-test"
 SOURCE_MOUNT="/src"
 WORKSPACE_DIR="/workspace"
 PYTHON_VERSION="3.12"

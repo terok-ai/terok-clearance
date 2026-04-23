@@ -1,11 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Install the terok-dbus systemd user unit and reload the user daemon.
+"""Install the terok-clearance systemd user unit and reload the user daemon.
 
 Renders the bundled ``terok-dbus.service`` into
 ``$XDG_CONFIG_HOME/systemd/user/terok-dbus.service`` with ``{{BIN}}``
-replaced by the operator-resolved ``terok-dbus`` invocation.  Matches
+replaced by the operator-resolved ``terok-clearance-hub`` invocation.  Matches
 the install patterns used by ``terok-credential-proxy`` and
 ``terok-gate``.
 """
@@ -38,11 +38,11 @@ def install_service(bin_path: Path | list[str]) -> Path:
     """Render the unit template, write it into the user systemd directory, reload.
 
     Args:
-        bin_path: Either a ``Path`` naming the ``terok-dbus`` launcher
+        bin_path: Either a ``Path`` naming the ``terok-clearance-hub`` launcher
             (a single executable, space-tolerant — e.g. from
-            ``shutil.which("terok-dbus")``) or a ``list[str]`` argv
+            ``shutil.which("terok-clearance-hub")``) or a ``list[str]`` argv
             (the module-fallback form, e.g.
-            ``[sys.executable, "-m", "terok_dbus._cli"]``).  Each token
+            ``[sys.executable, "-m", "terok_clearance._cli"]``).  Each token
             is quoted individually on render so systemd's whitespace
             tokeniser sees the intended argv boundaries regardless of
             spaces inside any element.
@@ -96,7 +96,7 @@ def _systemd_quote(value: str) -> str:
 def _read_template() -> str:
     """Load the unit template from the installed package's ``resources/systemd``."""
     source = (
-        importlib_resources.files("terok_dbus")
+        importlib_resources.files("terok_clearance")
         .joinpath("resources")
         .joinpath("systemd")
         .joinpath(UNIT_NAME)

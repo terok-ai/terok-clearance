@@ -10,7 +10,7 @@ on:
 
 jobs:
   reuse:
-    if: github.repository == 'terok-ai/terok-dbus'
+    if: github.repository == 'terok-ai/terok-clearance'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -18,7 +18,7 @@ jobs:
         uses: fsfe/reuse-action@676e2d560c9a403aa252096d99fcab3e1132b0f5 # v6
 
   lint:
-    if: github.repository == 'terok-ai/terok-dbus'
+    if: github.repository == 'terok-ai/terok-clearance'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -34,7 +34,7 @@ jobs:
           args: format --check
 
   docstring-coverage:
-    if: github.repository == 'terok-ai/terok-dbus'
+    if: github.repository == 'terok-ai/terok-clearance'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -48,10 +48,10 @@ jobs:
         run: pip install -r .github/requirements-ci.txt
 
       - name: Check docstring coverage
-        run: docstr-coverage src/terok_dbus/ --fail-under=95
+        run: docstr-coverage src/terok_clearance/ --fail-under=95
 
   dead-code:
-    if: github.repository == 'terok-ai/terok-dbus'
+    if: github.repository == 'terok-ai/terok-clearance'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -65,10 +65,10 @@ jobs:
         run: pip install -r .github/requirements-ci.txt
 
       - name: Check for dead code
-        run: vulture src/terok_dbus/ --min-confidence 80
+        run: vulture src/terok_clearance/ --min-confidence 80
 
   tach:
-    if: github.repository == 'terok-ai/terok-dbus'
+    if: github.repository == 'terok-ai/terok-clearance'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -85,7 +85,7 @@ jobs:
         run: tach check
 
   security:
-    if: github.repository == 'terok-ai/terok-dbus'
+    if: github.repository == 'terok-ai/terok-clearance'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -99,4 +99,4 @@ jobs:
         run: pip install -r .github/requirements-ci.txt
 
       - name: Run SAST scan
-        run: bandit -r src/terok_dbus/ -ll
+        run: bandit -r src/terok_clearance/ -ll

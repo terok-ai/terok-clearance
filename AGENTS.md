@@ -1,8 +1,8 @@
-# Agent Guide (terok-dbus)
+# Agent Guide (terok-clearance)
 
 ## Purpose
 
-`terok-dbus` provides D-Bus desktop notifications for the terok clearance system. It wraps the freedesktop Notifications spec via `dbus-fast`, exposing an async-first API with action buttons and a graceful no-op fallback for headless environments.
+`terok-clearance` provides D-Bus desktop notifications for the terok clearance system. It wraps the freedesktop Notifications spec via `dbus-fast`, exposing an async-first API with action buttons and a graceful no-op fallback for headless environments.
 
 ## Technology Stack
 
@@ -15,7 +15,7 @@
 
 ## Repo layout
 
-- `src/terok_dbus/`: Python package (public API in `__init__.py`, CLI in `_cli.py`)
+- `src/terok_clearance/`: Python package (public API in `__init__.py`, CLI in `_cli.py`)
 - `tests/`: pytest test suite
 - `docs/`: MkDocs documentation source
 
@@ -41,7 +41,7 @@ make check       # Run lint + test-unit + tach + security + docstrings + deadcod
 make install-dev  # Install all development dependencies
 make security     # Run bandit SAST scan
 make clean        # Remove build artifacts
-make spdx NAME="Real Human Name" FILES="src/terok_dbus/foo.py"  # Add SPDX header
+make spdx NAME="Real Human Name" FILES="src/terok_clearance/foo.py"  # Add SPDX header
 ```
 
 ## Coding Standards
@@ -79,12 +79,12 @@ Planned module structure:
 ```
 _constants, _protocol, _null → no dependencies
 _notifier → depends on _constants only
-_cli → depends on terok_dbus (public API)
+_cli → depends on terok_clearance (public API)
 ```
 
 ## Development Workflow
 
-1. Make changes in `src/terok_dbus/`
+1. Make changes in `src/terok_clearance/`
 2. Run `make lint` frequently during development
 3. Add/update tests in `tests/`
 4. Run `make test-unit` to verify changes

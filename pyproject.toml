@@ -3,7 +3,7 @@ requires = ["poetry-core>=1.9.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
 build-backend = "poetry_dynamic_versioning.backend"
 
 [tool.poetry]
-name = "terok-dbus"
+name = "terok-clearance"
 version = "0.5.13"
 description = "D-Bus desktop notification package for terok"
 readme = "README.md"
@@ -19,7 +19,7 @@ classifiers = [
 ]
 
 packages = [
-  { include = "terok_dbus", from = "src" },
+  { include = "terok_clearance", from = "src" },
 ]
 
 [tool.poetry.dependencies]
@@ -53,7 +53,7 @@ mkdocs-section-index = ">=0.3"
 mkdocs-terok = {url = "https://github.com/terok-ai/mkdocs-terok/releases/download/v0.1.0/mkdocs_terok-0.1.0-py3-none-any.whl"}
 
 [tool.poetry.scripts]
-terok-dbus = "terok_dbus._cli:main"
+terok-clearance-hub = "terok_clearance._cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -98,10 +98,10 @@ ignore = [
 # dbus_fast ServiceInterface signature strings ("s", "b", "u") look like undefined
 # names to ruff; they are D-Bus type codes, not Python identifiers.  The quotes
 # must stay — PEP 563 stringifies them but dbus_fast reads the raw strings.
-"src/terok_dbus/_serve.py" = ["F821", "F722", "UP037"]
+"src/terok_clearance/_serve.py" = ["F821", "F722", "UP037"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["terok_dbus"]
+known-first-party = ["terok_clearance"]
 combine-as-imports = true
 
 [tool.ruff.format]

@@ -11,8 +11,8 @@ from mkdocs_terok.quality_report import QualityReportConfig, generate_quality_re
 ROOT = Path(__file__).parent.parent
 config = QualityReportConfig(
     root=ROOT,
-    src_dir=ROOT / "src" / "terok_dbus",
-    codecov_repo="terok-ai/terok-dbus",
+    src_dir=ROOT / "src" / "terok_clearance",
+    codecov_repo="terok-ai/terok-clearance",
     codecov_treemap_path=ROOT / "docs" / "assets" / "coverage_treemap.svg",
     file_level_loc=True,
 )

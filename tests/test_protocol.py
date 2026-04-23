@@ -3,8 +3,8 @@
 
 """Tests for the Notifier protocol — structural subtyping checks."""
 
-from terok_dbus._null import NullNotifier
-from terok_dbus._protocol import Notifier
+from terok_clearance._null import NullNotifier
+from terok_clearance._protocol import Notifier
 
 
 class TestNotifierProtocol:

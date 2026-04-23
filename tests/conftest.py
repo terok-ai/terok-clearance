@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Shared test fixtures and constants for terok-dbus."""
+"""Shared test fixtures and constants for terok-clearance."""
 
 from __future__ import annotations
 

@@ -16,7 +16,7 @@ from collections.abc import AsyncIterator, Iterator
 import pytest
 from dbusmock import SpawnedMock
 
-from terok_dbus import DbusNotifier, Notifier, create_notifier
+from terok_clearance import DbusNotifier, Notifier, create_notifier
 
 # Activate dbusmock's pytest fixtures (dbusmock_session, dbusmock_system).
 pytest_plugins = "dbusmock.pytest_fixtures"

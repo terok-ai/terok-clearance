@@ -3,7 +3,7 @@
 
 """Tests for D-Bus addressing constants and close-reason codes."""
 
-from terok_dbus._constants import (
+from terok_clearance._constants import (
     BUS_NAME,
     INTERFACE_NAME,
     OBJECT_PATH,

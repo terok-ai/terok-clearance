@@ -1,14 +1,14 @@
-# terok-dbus
+# terok-clearance
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![REUSE status](https://api.reuse.software/badge/github.com/terok-ai/terok-dbus)](https://api.reuse.software/info/github.com/terok-ai/terok-dbus)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=terok-ai_terok-dbus&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=terok-ai_terok-dbus)
+[![REUSE status](https://api.reuse.software/badge/github.com/terok-ai/terok-clearance)](https://api.reuse.software/info/github.com/terok-ai/terok-clearance)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=terok-ai_terok-clearance&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=terok-ai_terok-clearance)
 
 D-Bus desktop notification package for the terok clearance system.
 
 ## Overview
 
-terok-dbus wraps the [freedesktop Notifications](https://specifications.freedesktop.org/notification-spec/latest/) D-Bus interface via [`dbus-fast`](https://github.com/Bluetooth-Devices/dbus-fast), providing an async-first Python API for desktop notifications with action buttons and a graceful fallback for headless environments.
+terok-clearance wraps the [freedesktop Notifications](https://specifications.freedesktop.org/notification-spec/latest/) D-Bus interface via [`dbus-fast`](https://github.com/Bluetooth-Devices/dbus-fast), providing an async-first Python API for desktop notifications with action buttons and a graceful fallback for headless environments.
 
 ### Features
 
@@ -26,7 +26,7 @@ terok-dbus wraps the [freedesktop Notifications](https://specifications.freedesk
 ## Installation
 
 ```bash
-pip install terok-dbus
+pip install terok-clearance
 ```
 
 ## Quick start
@@ -35,7 +35,7 @@ pip install terok-dbus
 
 ```python
 import asyncio
-from terok_dbus import create_notifier
+from terok_clearance import create_notifier
 
 async def main():
     notifier = await create_notifier(app_name="terok")
@@ -62,13 +62,13 @@ asyncio.run(main())
 ### CLI tool (development / testing)
 
 ```bash
-terok-dbus-notify "Title" "Body" --actions allow:Allow deny:Deny --wait
+terok-clearance-notify "Title" "Body" --actions allow:Allow deny:Deny --wait
 ```
 
 ## Documentation
 
-- **[User Guide](https://terok-ai.github.io/terok-dbus/)** — overview, quick start, API preview
-- **[Developer Guide](https://terok-ai.github.io/terok-dbus/developer/)** — contributing, conventions, architecture
+- **[User Guide](https://terok-ai.github.io/terok-clearance/)** — overview, quick start, API preview
+- **[Developer Guide](https://terok-ai.github.io/terok-clearance/developer/)** — contributing, conventions, architecture
 
 ## License
 

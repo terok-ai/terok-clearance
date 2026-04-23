@@ -13,7 +13,7 @@ import sys
 
 import pytest
 
-from terok_dbus import NullNotifier, create_notifier
+from terok_clearance import NullNotifier, create_notifier
 
 
 class TestHeadlessFallback:
@@ -33,10 +33,10 @@ class TestHeadlessFallback:
         assert nid == 0
 
     def test_cli_prints_zero_without_bus(self):
-        """terok-dbus-notify prints '0' and exits 0 when bus is absent."""
+        """terok-clearance-notify prints '0' and exits 0 when bus is absent."""
         env = {k: v for k, v in __import__("os").environ.items() if k != "DBUS_SESSION_BUS_ADDRESS"}
         result = subprocess.run(
-            [sys.executable, "-m", "terok_dbus._cli", "notify", "Headless", "Test"],
+            [sys.executable, "-m", "terok_clearance._cli", "notify", "Headless", "Test"],
             capture_output=True,
             text=True,
             timeout=10,

@@ -3,8 +3,8 @@
 ## Development setup
 
 ```bash
-git clone git@github.com:terok-ai/terok-dbus.git
-cd terok-dbus
+git clone git@github.com:terok-ai/terok-clearance.git
+cd terok-clearance
 make install-dev
 ```
 
@@ -56,7 +56,7 @@ _constants    — D-Bus bus name, object path, interface, close reason codes
 _protocol     — Notifier Protocol (PEP 544, runtime_checkable)
 _null         — NullNotifier (no-op fallback)
 _notifier     — DesktopNotifier (dbus-fast implementation)
-_cli          — terok-dbus-notify CLI (dev/testing tool)
+_cli          — terok-clearance-notify CLI (dev/testing tool)
 __init__      — public API + create_notifier() factory
 ```
 
@@ -65,5 +65,5 @@ __init__      — public API + create_notifier() factory
 ```text
 _constants, _protocol, _null → no dependencies
 _notifier → depends on _constants only
-_cli → depends on terok_dbus (public API)
+_cli → depends on terok_clearance (public API)
 ```
