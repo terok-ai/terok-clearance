@@ -47,6 +47,16 @@ class TestInstallNotifierService:
         body = dest.read_text()
         assert "/usr/bin/python3 -m terok_clearance.notifier.app" in body
 
+    def test_default_argv_renders_python_module_invocation(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Calling bare bakes ``python -m terok_clearance.notifier.app``."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        with patch.object(_install, "_daemon_reload"):
+            dest = install_notifier_service()
+        body = dest.read_text()
+        assert "-m terok_clearance.notifier.app" in body
+
     def test_is_idempotent(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
         with patch.object(_install, "_daemon_reload"):
