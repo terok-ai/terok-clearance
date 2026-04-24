@@ -28,8 +28,21 @@ import contextlib
 import os
 import shutil
 import subprocess  # nosec B404
+import sys
 from importlib import resources as importlib_resources
 from pathlib import Path
+
+#: Default argv for the hub launcher — ``python -m`` the CLI entrypoint.
+#:
+#: Sandbox used to pass this argv explicitly; baking it in lets
+#: callers invoke ``install_service()`` bare.  ``sys.executable``
+#: skips PATH resolution (a hostile PATH can't poison the rendered
+#: ``ExecStart=``) and lands on the same venv's python that owns the
+#: installed clearance package.
+_DEFAULT_HUB_ARGV: tuple[str, ...] = (sys.executable, "-m", "terok_clearance.cli.main")
+
+#: Default argv for the notifier launcher — same reasoning as above.
+_DEFAULT_NOTIFIER_ARGV: tuple[str, ...] = (sys.executable, "-m", "terok_clearance.notifier.app")
 
 #: Unit files this installer owns.  Each is rendered from a template
 #: under ``resources/systemd/``; ``{{UNIT_VERSION}}`` + ``{{BIN}}``
@@ -81,7 +94,7 @@ the session bus.
 UNIT_NAME = HUB_UNIT_NAME
 
 
-def install_service(bin_path: Path | list[str]) -> tuple[Path, Path]:
+def install_service(bin_path: Path | list[str] | None = None) -> tuple[Path, Path]:
     """Render + write both unit files into the user systemd directory.
 
     Also disables + unlinks any leftover pre-split ``terok-dbus.service``
@@ -90,15 +103,17 @@ def install_service(bin_path: Path | list[str]) -> tuple[Path, Path]:
 
     Args:
         bin_path: ``Path`` to the ``terok-clearance-hub`` launcher, or
-            a ``list[str]`` argv (the module-fallback form, e.g.
-            ``[sys.executable, "-m", "terok_clearance.cli.main"]``).
+            a ``list[str]`` argv.  ``None`` (the default) renders
+            ``python -m terok_clearance.cli.main`` against the running
+            interpreter — the shape pipx installs use — so callers
+            don't need to spell clearance's own module layout.
 
     Returns:
         ``(hub_path, verdict_path)`` — the on-disk paths of the two
         unit files.
     """
     _uninstall_legacy()
-    bin_rendered = _render_exec_start(bin_path)
+    bin_rendered = _render_exec_start(bin_path if bin_path is not None else list(_DEFAULT_HUB_ARGV))
     dest_dir = _user_systemd_dir()
     dest_dir.mkdir(parents=True, exist_ok=True)
     paths: list[Path] = []
@@ -128,7 +143,7 @@ def uninstall_service() -> None:
     _daemon_reload()
 
 
-def install_notifier_service(bin_path: Path | list[str]) -> Path:
+def install_notifier_service(bin_path: Path | list[str] | None = None) -> Path:
     """Render + write the notifier unit into the user systemd directory.
 
     Paired with :func:`install_service`: headless hosts that installed
@@ -137,13 +152,16 @@ def install_notifier_service(bin_path: Path | list[str]) -> Path:
 
     Args:
         bin_path: ``Path`` to the notifier launcher, or a ``list[str]``
-            argv (the module-fallback form, e.g.
-            ``[sys.executable, "-m", "terok_clearance.notifier.app"]``).
+            argv.  ``None`` (the default) renders
+            ``python -m terok_clearance.notifier.app`` against the
+            running interpreter — same rationale as :func:`install_service`.
 
     Returns:
         The on-disk path of the written unit file.
     """
-    bin_rendered = _render_exec_start(bin_path)
+    bin_rendered = _render_exec_start(
+        bin_path if bin_path is not None else list(_DEFAULT_NOTIFIER_ARGV)
+    )
     dest_dir = _user_systemd_dir()
     dest_dir.mkdir(parents=True, exist_ok=True)
     template = _read_template(NOTIFIER_UNIT_NAME)

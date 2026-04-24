@@ -58,6 +58,18 @@ class TestInstallService:
         with patch.object(_install.shutil, "which", return_value=None):
             _install._daemon_reload()
 
+    def test_default_argv_renders_python_module_invocation(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Calling ``install_service()`` bare bakes ``python -m terok_clearance.cli.main``."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        with patch.object(_install, "_daemon_reload"):
+            hub, verdict = install_service()
+        hub_body = hub.read_text()
+        verdict_body = verdict.read_text()
+        assert "-m terok_clearance.cli.main serve" in hub_body
+        assert "-m terok_clearance.cli.main serve-verdict" in verdict_body
+
     def test_migrates_legacy_terok_dbus_service(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

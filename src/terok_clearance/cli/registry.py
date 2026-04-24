@@ -92,7 +92,6 @@ async def _handle_install_service(*, bin_path: str | None = None) -> None:  # NO
     every other handler's calling convention.
     """
     import shutil
-    import sys
     from pathlib import Path as _Path
 
     from terok_clearance.runtime.installer import install_service
@@ -100,11 +99,9 @@ async def _handle_install_service(*, bin_path: str | None = None) -> None:  # NO
     if bin_path is not None and not bin_path:
         raise SystemExit("install-service: --bin-path cannot be empty")
     discovered = bin_path or shutil.which("terok-clearance-hub")
-    resolved: _Path | list[str] = (
-        _Path(discovered)
-        if discovered is not None
-        else [sys.executable, "-m", "terok_clearance.cli.main"]
-    )
+    # ``install_service(None)`` falls through to ``python -m terok_clearance.cli.main``
+    # — no need to spell the argv here when the installer owns the default.
+    resolved = _Path(discovered) if discovered is not None else None
     dest = install_service(resolved)
     print(f"Installed {dest}")  # noqa: T201
     print(  # noqa: T201
