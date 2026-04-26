@@ -16,6 +16,8 @@ path = [
   "**/py.typed",
   "**/*.png",
   "tests/containers/Containerfile.*",
+  "**/*.svg",
+  "**/*.d2",
 ]
 SPDX-FileCopyrightText = "2026 Jiri Vyskocil"
 SPDX-License-Identifier = "Apache-2.0"
