@@ -142,13 +142,6 @@ asyncio.run(main())
 terok-clearance-notify "Title" "Body" --actions allow:Allow deny:Deny --wait
 ```
 
-## Documentation
-
-- **[User Guide](https://terok-ai.github.io/terok-clearance/)** —
-  overview, quick start, API preview
-- **[Developer Guide](https://terok-ai.github.io/terok-clearance/developer/)** —
-  contributing, conventions, architecture
-
 ## License
 
 Apache-2.0 — see [LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt).
