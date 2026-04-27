@@ -46,7 +46,7 @@ class Notifier(Protocol):
             container_id: Presentation-layer hint: the 12-char podman
                 container ID the event refers to.  The desktop
                 ``DbusNotifier`` ignores it; ``CallbackNotifier`` attaches
-                it to the :class:`~terok_clearance.notifications.callback.Notification` so
+                it to the [`Notification`][terok_clearance.notifications.callback.Notification] so
                 rich consumers can render it alongside the user-facing name.
             container_name: Podman ``--name`` matching the ID.  Same
                 propagation rules as ``container_id``.

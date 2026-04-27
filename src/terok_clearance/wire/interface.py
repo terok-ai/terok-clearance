@@ -4,12 +4,12 @@
 """The ``org.terok.Clearance1`` varlink interface — events out, verdicts in.
 
 Subscribers call ``Subscribe()`` with ``more=true`` and receive a stream
-of :class:`~terok_clearance.domain.events.ClearanceEvent` records until
+of [`ClearanceEvent`][terok_clearance.domain.events.ClearanceEvent] records until
 the connection closes.  Verdict clients call ``Verdict()`` as a regular
 RPC; the hub validates the ``(container, request_id, dest)`` triple
 against its live-pending state before shelling out to ``terok-shield``.
 
-The whole surface is typed-Python → :mod:`asyncvarlink` derives the
+The whole surface is typed-Python → `asyncvarlink` derives the
 varlink IDL from these annotations, so there's no hand-authored
 ``.varlink`` file to drift from the code.  ``varlinkctl`` can still
 introspect the service at runtime via the standard
@@ -35,7 +35,7 @@ class Clearance1Interface(VarlinkInterface, name=CLEARANCE_INTERFACE_NAME):
     without a live varlink connection:
 
     * ``event_stream_factory`` — returns a fresh ``AsyncIterator``
-      yielding :class:`ClearanceEvent` instances.  The hub owns one
+      yielding [`ClearanceEvent`][terok_clearance.ClearanceEvent] instances.  The hub owns one
       per connected subscriber so backpressure is local to the slow
       client.
     * ``apply_verdict`` — validates the triple and, on success, shells
@@ -73,10 +73,10 @@ class Clearance1Interface(VarlinkInterface, name=CLEARANCE_INTERFACE_NAME):
         """Apply *action* (``allow`` / ``deny``) to *dest* for *container*.
 
         Returns ``True`` when ``terok-shield`` accepted the verdict.
-        Raises :class:`~terok_clearance.wire.errors.UnknownRequest`,
-        :class:`~terok_clearance.wire.errors.VerdictTupleMismatch`,
-        :class:`~terok_clearance.wire.errors.InvalidAction`, or
-        :class:`~terok_clearance.wire.errors.ShieldCliFailed` on the
+        Raises [`UnknownRequest`][terok_clearance.wire.errors.UnknownRequest],
+        [`VerdictTupleMismatch`][terok_clearance.wire.errors.VerdictTupleMismatch],
+        [`InvalidAction`][terok_clearance.wire.errors.InvalidAction], or
+        [`ShieldCliFailed`][terok_clearance.wire.errors.ShieldCliFailed] on the
         four refusal paths — clients get a typed error they can render
         without stringly-matching the message.
         """
