@@ -15,7 +15,7 @@ from dbus_fast.aio import MessageBus
 #: Addressing for the freedesktop Notifications service.  Exposed at
 #: module scope so tests + out-of-tree consumers can reference the
 #: same literals the backend dispatches against, but callers in new
-#: code should reach for the :class:`~.protocol.Notifier` abstraction
+#: code should reach for the [`Notifier`][protocol.Notifier] abstraction
 #: instead of re-implementing the spec.
 BUS_NAME = "org.freedesktop.Notifications"
 OBJECT_PATH = "/org/freedesktop/Notifications"
@@ -140,7 +140,7 @@ class DbusNotifier:
         terok task triple) are dropped on the floor here — callers are
         expected to have folded the user-facing identity into ``body``
         already.  The kwargs stay in the signature for
-        :class:`~terok_clearance.notifications.protocol.Notifier` conformance so callers
+        [`Notifier`][terok_clearance.notifications.protocol.Notifier] conformance so callers
         don't have to branch on notifier kind.
         """
         await self.connect()

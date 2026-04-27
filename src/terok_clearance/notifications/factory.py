@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Session-bus probing factory for the appropriate :class:`Notifier`.
+"""Session-bus probing factory for the appropriate [`Notifier`][].
 
-Thin convenience: try a real :class:`DbusNotifier`, fall back to a
-:class:`NullNotifier` if no session bus is reachable.  Lives at the
+Thin convenience: try a real [`DbusNotifier`][], fall back to a
+[`NullNotifier`][] if no session bus is reachable.  Lives at the
 same layer as the concrete backends so CLI / consumer code can reach
 it without importing the package root (which causes a layering
 circularity — ``interface → interface``).

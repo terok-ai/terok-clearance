@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""The :class:`ClearanceEvent` value type.
+"""The [`ClearanceEvent`][] value type.
 
 One flat dataclass carries every event kind the hub fans out to
 subscribers.  Varlink IDL can't model sum types directly, so the

@@ -54,7 +54,7 @@ class Verdict1Interface(VarlinkInterface, name=VERDICT_INTERFACE_NAME):
         The helper never raises — spawn failure, non-zero exit, and
         timeout all fold into ``ok=False`` with a reason string the
         hub re-raises to its own client as
-        :class:`~terok_clearance.wire.errors.ShieldCliFailed`.  Any
+        [`ShieldCliFailed`][terok_clearance.wire.errors.ShieldCliFailed].  Any
         unexpected exception from the injected helper is caught here
         too so it surfaces as a structured reply instead of a varlink
         transport error on the hub side; ``CancelledError`` is always
