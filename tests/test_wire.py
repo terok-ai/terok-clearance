@@ -31,6 +31,7 @@ class TestClearanceEvent:
         assert event.action == ""
         assert event.ok is False
         assert event.reason == ""
+        assert event.dossier == {}
 
     def test_fields_preserve_values(self) -> None:
         """Constructor assignment round-trips through public fields."""

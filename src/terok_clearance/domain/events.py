@@ -11,7 +11,7 @@ per-kind — the same pattern ``io.systemd.Resolve.Monitor`` uses.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -24,14 +24,21 @@ class ClearanceEvent:
     Known values of ``type`` (additional fields beyond ``container``):
 
     * ``connection_blocked`` — ``request_id``, ``dest``, ``port``,
-      ``proto``, ``domain``.  Requires an operator verdict.
+      ``proto``, ``domain``, ``dossier``.  Requires an operator verdict.
     * ``verdict_applied`` — ``request_id``, ``action``, ``ok``.
-    * ``container_started`` — no extras.
-    * ``container_exited`` — ``reason``.
-    * ``shield_up`` / ``shield_down`` / ``shield_down_all`` — no extras.
+    * ``container_started`` — ``dossier``.
+    * ``container_exited`` — ``reason``, ``dossier``.
+    * ``shield_up`` / ``shield_down`` / ``shield_down_all`` — ``dossier``.
 
     Unknown values are forwarded unchanged so the wire format can grow
     without breaking clients pinned to older schemas.
+
+    ``dossier`` carries the orchestrator-supplied identity bundle that the
+    shield's per-container reader resolved at emit time — the keys are
+    whatever the orchestrator publishes under its ``dossier.*`` OCI
+    annotation namespace (``project``, ``task``, ``name``, …).  Empty for
+    shield-only deployments where no orchestrator participates; clients
+    must fall back to ``container`` (the short ID) in that case.
     """
 
     type: str
@@ -44,3 +51,4 @@ class ClearanceEvent:
     action: str = ""
     ok: bool = False
     reason: str = ""
+    dossier: dict[str, str] = field(default_factory=dict)

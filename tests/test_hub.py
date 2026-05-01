@@ -83,6 +83,61 @@ class TestTranslateReaderEvent:
         assert event.container == CONTAINER
         assert event.request_id == ""
 
+    def test_connection_blocked_carries_dossier(self) -> None:
+        """Reader-supplied ``dossier`` survives the translation pass."""
+        event = _translate_reader_event(
+            "connection_blocked",
+            {
+                "type": "pending",
+                "container": CONTAINER,
+                "id": f"{CONTAINER}:1",
+                "dest": DEST_IP,
+                "port": 443,
+                "proto": 6,
+                "dossier": {"task": "abc", "project": "terok", "name": "alpine-7"},
+            },
+        )
+        assert event.dossier == {"task": "abc", "project": "terok", "name": "alpine-7"}
+
+    def test_missing_dossier_normalises_to_empty(self) -> None:
+        """Shield-only readers (no orchestrator) ship no dossier — translator absorbs it."""
+        event = _translate_reader_event(
+            "connection_blocked",
+            {
+                "type": "pending",
+                "container": CONTAINER,
+                "id": f"{CONTAINER}:1",
+                "dest": DEST_IP,
+                "port": 443,
+                "proto": 6,
+            },
+        )
+        assert event.dossier == {}
+
+    def test_non_object_dossier_is_dropped(self) -> None:
+        """Misshaped dossier (list/scalar/null) doesn't break the translator."""
+        event = _translate_reader_event(
+            "connection_blocked",
+            {
+                "type": "pending",
+                "container": CONTAINER,
+                "id": f"{CONTAINER}:1",
+                "dest": DEST_IP,
+                "port": 443,
+                "proto": 6,
+                "dossier": [1, 2, 3],
+            },
+        )
+        assert event.dossier == {}
+
+    def test_dossier_values_are_string_coerced(self) -> None:
+        """Numeric/boolean values from the reader are stringified."""
+        event = _translate_reader_event(
+            "shield_up",
+            {"type": "shield_up", "container": CONTAINER, "dossier": {"port": 8080}},
+        )
+        assert event.dossier == {"port": "8080"}
+
 
 # ── Live-verdict authz binding ────────────────────────────────────────
 
