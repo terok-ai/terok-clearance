@@ -8,10 +8,15 @@ paired with the hub's own.  Splitting the roles means headless hosts
 (CI, servers) run the hub without pulling in a desktop stack, and
 notifier crashes never take the firewall or the hub with them.
 
-Previously lived in the terok package; moved here because nothing in
-the notifier is orchestration-specific — any clearance-capable
-deployment (with or without terok) benefits from the desktop bridge,
-and the task-name enrichment is fed through the
+Lives in the clearance package (rather than in terok) because the
+notifier's job — rendering hub events as desktop popups and routing
+operator clicks back as verdicts — has no terok-specific logic.
+It's one of several operator UIs that subscribe to the hub on the
+**consumer-axis** seam (the others today are the standalone
+``terok clearance`` Textual app and the embedded ``terok-tui``
+screen); the producer-axis is fixed at shield, so "operator UI for
+shield" rather than "any firewall console" is the right framing.
+Task-name enrichment travels through the
 ``ai.terok.task_meta_path`` annotation data contract (see
 [`terok_clearance.client.identity_resolver`][terok_clearance.client.identity_resolver]).
 """
