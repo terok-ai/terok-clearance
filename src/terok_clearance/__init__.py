@@ -3,7 +3,30 @@
 
 """Clearance hub + desktop notification library for terok.
 
-Two unrelated wire formats live under this one package:
+The operator-UI plane for terok-shield: turns shield's blocked-
+connection events into Allow/Deny prompts and routes the operator's
+verdict back to shield for enforcement.  Three axes of pluggability
+apply, with very different answers:
+
+* **Producer (event source) — closed.**  Shield is the only
+  producer.  The wire vocabulary (``shield_up``, ``connection_blocked``,
+  …) names shield's state machine, and the verdict path execs
+  ``terok-shield allow|deny``.  A non-shield "clearance" wouldn't
+  work end-to-end; the package is shield's UI plane, not a generic
+  firewall console.
+* **Container runtime — open.**  [`ContainerInspector`][terok_clearance.ContainerInspector]
+  abstracts which runtime is hosting the container being
+  inspected (podman today; krun, containerd, etc. plug in at this
+  seam).  A different axis from the producer one.
+* **Operator UI (consumer) — open.**  Anything that subscribes to
+  the hub's varlink stream and implements the
+  [`Notifier`][terok_clearance.Notifier] protocol on the verdict-routing side
+  is a valid UI: today the D-Bus desktop notifier
+  ([`DbusNotifier`][terok_clearance.DbusNotifier]), the standalone Textual
+  ``terok clearance`` app, and the embedded ``terok-tui`` screen all
+  ride on this seam.
+
+Two unrelated wire formats live under this one package as a result:
 
 * ``org.terok.Clearance1`` over a unix-socket **varlink** transport —
   the hub ([`ClearanceHub`][terok_clearance.ClearanceHub]) and the client library
