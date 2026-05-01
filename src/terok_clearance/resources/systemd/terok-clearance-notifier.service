@@ -51,6 +51,15 @@ SystemCallArchitectures=native
 KeyringMode=private
 UMask=0077
 IPAddressDeny=any
+# AF_UNIX-only: matches the hub's defense-in-depth.  The notifier's
+# own transports (varlink upstream, D-Bus session bus downstream)
+# are both AF_UNIX.  The forked ``podman inspect`` used for
+# identity-resolution enrichment is wrapped in a soft-fail in the
+# subscriber's ``_resolve_identity`` (notifications fall back to
+# raw container IDs on any inspector failure), so even on hosts
+# where podman tooling reaches for a wider family the operator-
+# visible behaviour is degraded labels rather than missed popups.
+RestrictAddressFamilies=AF_UNIX
 
 [Install]
 WantedBy=default.target
