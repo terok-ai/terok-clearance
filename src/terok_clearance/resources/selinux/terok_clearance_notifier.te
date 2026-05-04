@@ -1,0 +1,212 @@
+module terok_clearance_notifier 1.5;
+
+# Optional confined domain for the terok-clearance-notifier daemon.
+#
+# The notifier subscribes to clearance-hub events and bridges them to
+# freedesktop desktop notifications via the session D-Bus.  Like the
+# hub, AF_UNIX-only with the systemd hardening stack already baked
+# into the unit template (``ProtectSystem=full``, ``ProtectHome=
+# read-only``, ``IPAddressDeny=any``, …).
+#
+# Different domain from the hub because the surfaces differ — the
+# notifier reads the session bus and emits notifications, the hub
+# owns server-side state.  Splitting them lets a future tightening
+# scope D-Bus reach to only the notifier.
+#
+# Verdict daemon is intentionally NOT confined: it execs
+# ``terok-shield allow|deny`` which does ``podman unshare nsenter
+# nft``, and that exec chain doesn't tolerate tight SELinux labelling.
+# The unit template comment for terok-clearance-verdict.service spells
+# this out — leave it unconfined and harden hub + notifier only.
+#
+# Soak posture: permissive at install time
+# (``semanage permissive -a terok_clearance_notifier_t``).
+#
+# Four pieces of transition policy below are needed to make the
+# systemd ``SELinuxContext=`` directive actually fire on a Fedora
+# user-systemd-service with ``NoNewPrivileges=yes`` set — see the
+# matching header in terok-sandbox's ``terok_gate.te`` for the full
+# anatomy.
+
+require {
+    type unconfined_t;
+    type unconfined_dbusd_t;
+    type session_dbusd_tmp_t;
+    type syslogd_t;
+    type kernel_t;
+    type init_t;
+    type bin_t;
+    type user_home_t;
+    type terok_clearance_hub_t;
+    # Path-walk types — see matching block in terok-sandbox's
+    # terok_vault.te for the rationale.  Notifier needs to walk to
+    # ``$XDG_RUNTIME_DIR/terok-clearance/`` to connect to the hub's
+    # varlink socket as a client.
+    type var_t;
+    type home_root_t;
+    type user_home_dir_t;
+    type gconf_home_t;
+    type data_home_t;
+    type user_tmp_t;
+    # Python-runtime read targets (see matching block in
+    # terok_clearance_hub.te for rationale).
+    type lib_t;
+    type ld_so_t;
+    type ld_so_cache_t;
+    type etc_t;
+    type usr_t;
+    type root_t;
+    type proc_t;
+    type sysctl_t;
+    type sysctl_vm_t;
+    type sysctl_vm_overcommit_t;
+    type sysctl_crypto_t;
+    type locale_t;
+    type cert_t;
+    type null_device_t;
+    type var_run_t;
+    role system_r;
+    role unconfined_r;
+    class unix_stream_socket {
+        create bind listen accept connect
+        read write getattr getopt setopt shutdown ioctl
+        connectto
+    };
+    class process {
+        transition sigchld signull signal siginh rlimitinh noatsecure
+        sigkill sigstop getattr getsched fork
+    };
+    class process2 { nnp_transition };
+    class file {
+        read write open getattr setattr execute execute_no_trans entrypoint map
+        create unlink rename lock ioctl
+    };
+    class dir { read search getattr open add_name remove_name write };
+    class sock_file { write getattr };
+    class lnk_file { read getattr };
+    class chr_file { read write open getattr ioctl };
+    class fd use;
+}
+
+type terok_clearance_notifier_t;
+role unconfined_r types terok_clearance_notifier_t;
+role system_r types terok_clearance_notifier_t;
+
+# Transition allows — see matching block in terok_clearance_hub.te
+# for the rationale (process:transition + process2:nnp_transition
+# under NoNewPrivileges=yes).
+allow unconfined_t terok_clearance_notifier_t:process { transition siginh rlimitinh noatsecure };
+allow unconfined_t terok_clearance_notifier_t:process2 nnp_transition;
+
+# See matching block in terok-sandbox's terok_vault.te.
+allow unconfined_t terok_clearance_notifier_t:process { signal sigkill signull sigstop getattr };
+
+# Read ``/proc/<pid>/attr/*`` of confined processes from unconfined_t
+# — see matching comment in terok-sandbox's terok_vault.te.
+allow unconfined_t terok_clearance_notifier_t:file { read open getattr };
+allow unconfined_t terok_clearance_notifier_t:dir { read open search getattr };
+
+# Entrypoint allows for the venv-installed python interpreter that
+# actually gets exec'd.
+allow terok_clearance_notifier_t bin_t:file { entrypoint execute read open getattr };
+allow terok_clearance_notifier_t user_home_t:file { entrypoint execute read open getattr };
+
+allow terok_clearance_notifier_t self:process { sigchld signull signal };
+allow terok_clearance_notifier_t self:fd use;
+allow terok_clearance_notifier_t self:unix_stream_socket {
+    create bind listen accept
+    read write getattr getopt setopt shutdown
+    connectto
+};
+
+allow terok_clearance_notifier_t init_t:fd use;
+allow terok_clearance_notifier_t init_t:unix_stream_socket {
+    read write getattr getopt setopt shutdown
+};
+
+# Path-walk + state access — same shape as terok_vault.te.
+# Notifier connects (as a client) to the hub's varlink socket under
+# ``$XDG_RUNTIME_DIR/terok-clearance/`` (user_tmp_t).
+allow terok_clearance_notifier_t var_t:dir { search getattr };
+allow terok_clearance_notifier_t home_root_t:dir { search getattr };
+allow terok_clearance_notifier_t user_home_dir_t:dir { search getattr };
+allow terok_clearance_notifier_t gconf_home_t:dir { search getattr };
+allow terok_clearance_notifier_t data_home_t:dir { search getattr open read };
+allow terok_clearance_notifier_t data_home_t:file { read open getattr };
+allow terok_clearance_notifier_t user_tmp_t:dir { search getattr };
+allow terok_clearance_notifier_t user_tmp_t:sock_file { write getattr };
+
+# ---- First-soak runtime allows (CPython startup + std reads) ----
+#
+# Same shape as the matching block in terok_clearance_hub.te — see
+# that file's comment for the rationale.  Notifier hits an identical
+# set of CPython-import-time perms.
+
+# Interpreter + dynamic loader.
+allow terok_clearance_notifier_t bin_t:dir { getattr search };
+allow terok_clearance_notifier_t bin_t:file map;
+allow terok_clearance_notifier_t lib_t:dir { getattr open read search };
+allow terok_clearance_notifier_t lib_t:file { execute getattr map open read };
+allow terok_clearance_notifier_t lib_t:lnk_file read;
+allow terok_clearance_notifier_t ld_so_t:file { execute map read };
+allow terok_clearance_notifier_t ld_so_cache_t:file { getattr map open read };
+allow terok_clearance_notifier_t usr_t:dir { getattr search };
+allow terok_clearance_notifier_t usr_t:file { getattr open read };
+allow terok_clearance_notifier_t etc_t:dir search;
+allow terok_clearance_notifier_t etc_t:lnk_file read;
+allow terok_clearance_notifier_t root_t:dir search;
+
+allow terok_clearance_notifier_t data_home_t:file { execute map };
+allow terok_clearance_notifier_t data_home_t:lnk_file { getattr read };
+
+allow terok_clearance_notifier_t proc_t:dir search;
+allow terok_clearance_notifier_t proc_t:lnk_file read;
+allow terok_clearance_notifier_t self:dir search;
+allow terok_clearance_notifier_t self:file { getattr open read };
+allow terok_clearance_notifier_t self:process getsched;
+allow terok_clearance_notifier_t self:unix_stream_socket connect;
+
+allow terok_clearance_notifier_t sysctl_t:dir search;
+allow terok_clearance_notifier_t sysctl_vm_t:dir search;
+allow terok_clearance_notifier_t sysctl_vm_overcommit_t:file { open read };
+allow terok_clearance_notifier_t sysctl_crypto_t:dir search;
+allow terok_clearance_notifier_t sysctl_crypto_t:file { open read };
+
+allow terok_clearance_notifier_t locale_t:dir search;
+allow terok_clearance_notifier_t locale_t:file { getattr map open read };
+allow terok_clearance_notifier_t locale_t:lnk_file read;
+
+allow terok_clearance_notifier_t null_device_t:chr_file { getattr ioctl read };
+
+allow terok_clearance_notifier_t kernel_t:fd use;
+allow terok_clearance_notifier_t unconfined_t:fd use;
+allow terok_clearance_notifier_t unconfined_t:unix_stream_socket {
+    getattr ioctl read write
+};
+
+allow terok_clearance_notifier_t var_run_t:dir search;
+allow terok_clearance_notifier_t cert_t:dir { getattr open read search };
+allow terok_clearance_notifier_t cert_t:file { getattr open read };
+allow terok_clearance_notifier_t user_home_dir_t:dir { open read };
+
+# ---- Notifier-specific reach: hub varlink + session D-Bus ----
+#
+# Notifier subscribes to clearance-hub events (varlink over
+# ``$XDG_RUNTIME_DIR/terok-clearance.sock``) and bridges them to
+# ``org.freedesktop.Notifications`` on the user's session bus.  The
+# session bus broker (dbus-daemon) runs in ``unconfined_dbusd_t``
+# and listens on a socket under ``session_dbusd_tmp_t``.
+allow terok_clearance_notifier_t terok_clearance_hub_t:unix_stream_socket connectto;
+allow terok_clearance_notifier_t unconfined_dbusd_t:unix_stream_socket connectto;
+allow terok_clearance_notifier_t session_dbusd_tmp_t:sock_file write;
+
+# ---- Cross-domain allows (non-permissive sources) ----
+#
+# Same rationale as the matching block in terok_clearance_hub.te.
+allow unconfined_t terok_clearance_notifier_t:lnk_file read;
+allow unconfined_t terok_clearance_notifier_t:file ioctl;
+allow syslogd_t terok_clearance_notifier_t:dir search;
+allow syslogd_t terok_clearance_notifier_t:file { read open getattr ioctl };
+allow syslogd_t terok_clearance_notifier_t:lnk_file read;
+# v1.5: see matching comment in terok_clearance_hub.te.
+allow syslogd_t terok_clearance_notifier_t:process getattr;
