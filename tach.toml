@@ -46,6 +46,18 @@ depends_on = [
 ]
 
 
+# Optional MAC hardening installer — out-of-band tool, not a
+# feature.  Lives under ``tools/`` because it's something a packager
+# (deb/rpm postinst, ansible, …) runs at install time, not part of
+# the daily clearance API.  Interface layer because it shells out
+# (subprocess + sudo) and writes systemd drop-ins under
+# ``$XDG_CONFIG_HOME``.  Standalone (no internal clearance deps).
+[[modules]]
+path = "terok_clearance.tools"
+layer = "interface"
+utility = true
+
+
 # ── Domain layer ────────────────────────────────────────────────────
 
 [[modules]]
