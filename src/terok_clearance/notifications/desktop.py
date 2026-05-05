@@ -12,6 +12,29 @@ from typing import Any
 
 from dbus_fast.aio import MessageBus
 
+#: Pango markup characters that gnome-shell parses inside notification
+#: summary / body strings.  Inputs reach this point already sanitised
+#: to printable ASCII by the hub's wire-format boundary, so only the
+#: three markup-meaningful element characters need a renderer-local
+#: pre-escape — ``"`` and ``'`` are literal inside element content per
+#: the Pango spec, newlines (legitimate body-line separators) survive,
+#: and every other printable byte passes through unchanged.  Order
+#: matters: ``&`` must be replaced first or a later ``&lt;`` would be
+#: re-escaped to ``&amp;lt;``.
+_PANGO_ESCAPES: tuple[tuple[str, str], ...] = (
+    ("&", "&amp;"),
+    ("<", "&lt;"),
+    (">", "&gt;"),
+)
+
+
+def _pango_escape(text: str) -> str:
+    """Escape the three Pango-markup element characters in *text*."""
+    for raw, escaped in _PANGO_ESCAPES:
+        text = text.replace(raw, escaped)
+    return text
+
+
 #: Addressing for the freedesktop Notifications service.  Exposed at
 #: module scope so tests + out-of-tree consumers can reference the
 #: same literals the backend dispatches against, but callers in new
@@ -154,8 +177,8 @@ class DbusNotifier:
             self._app_name,
             replaces_id,
             app_icon or _DEFAULT_APP_ICON,
-            summary,
-            body,
+            _pango_escape(summary),
+            _pango_escape(body),
             actions_flat,
             dict(hints) if hints is not None else {},
             timeout_ms,

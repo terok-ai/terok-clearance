@@ -389,31 +389,23 @@ class TestDossierRendering:
         assert "Container: alpine-7" in call.args[1]
 
     @pytest.mark.asyncio
-    async def test_malicious_dossier_values_are_sanitised_in_body(
+    async def test_subscriber_trusts_pre_sanitised_dossier(
         self, subscriber: EventSubscriber, mock_notifier: AsyncMock
     ) -> None:
-        """Markup-bearing dossier strings render as literal text, not as markup."""
-        await subscriber._on_event(
-            _blocked(dossier={"name": "<script>alert(1)</script>", "project": "p", "task": "t"})
-        )
-        call = mock_notifier.notify.await_args
-        body = call.args[1]
-        assert "<script>" not in body
-        assert "&lt;script&gt;" in body
-        # The notify-kwargs side carries the same sanitised values.
-        assert "<" not in call.kwargs["task_name"]
+        """Subscriber forwards dossier verbatim — sanitisation happens upstream.
 
-    @pytest.mark.asyncio
-    async def test_newline_in_dossier_does_not_inject_extra_body_lines(
-        self, subscriber: EventSubscriber, mock_notifier: AsyncMock
-    ) -> None:
-        """A ``\\n``-bearing dossier value can't smuggle a third body line."""
+        The wire-format invariant is enforced once at
+        ``hub.server._translate_reader_event``; subscribers see only
+        printable-ASCII dossier values by the time events fan out.  See
+        ``test_hub.py`` for the boundary tests that exercise the
+        producer-side transformation directly.
+        """
         await subscriber._on_event(
-            _blocked(dossier={"name": "evil\nProtocol: TCP fake-line", "project": "p", "task": "t"})
+            _blocked(dossier={"name": "alpine-7", "project": "p", "task": "t"})
         )
         call = mock_notifier.notify.await_args
-        # Body is exactly two lines for a first block — newline got squashed.
-        assert call.args[1].count("\n") == 1
+        assert "alpine-7" in call.args[1]
+        assert call.kwargs["task_name"] == "alpine-7"
 
     @pytest.mark.asyncio
     async def test_verdict_uses_dossier_captured_at_block_time(

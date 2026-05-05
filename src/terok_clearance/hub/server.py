@@ -39,6 +39,7 @@ from terok_clearance.wire.errors import (
     VerdictTupleMismatch,
 )
 from terok_clearance.wire.interface import Clearance1Interface
+from terok_clearance.wire.sanitize import sanitize, sanitize_mapping
 from terok_clearance.wire.socket import default_clearance_socket_path
 
 _log = logging.getLogger(__name__)
@@ -341,45 +342,54 @@ class ClearanceHub:
 def _translate_reader_event(wire_type: str, raw: dict) -> ClearanceEvent:
     """Build a [`ClearanceEvent`][terok_clearance.ClearanceEvent] from an ingester-parsed dict.
 
-    The ingester already decodes JSON; this just moves fields around
-    into the typed shape and normalises missing values.  Keyed by
-    ``wire_type`` so each kind gets exactly the fields it needs.
+    Every string field is run through
+    [`sanitize`][terok_clearance.wire.sanitize.sanitize] on the way in
+    — this is the single chokepoint that enforces the wire-format
+    invariant for every subscriber, including third-party listeners
+    that didn't know they had to escape.  Producers (the shield NFLOG
+    reader, the shield CLI) already sanitise on emit as
+    belt-and-braces for the container-out path; the duplicate work
+    here covers any future emitter (or compromised one) that doesn't.
+
+    The ingester already decoded JSON; this routine just moves fields
+    around into the typed shape and normalises missing values.  Keyed
+    by ``wire_type`` so each kind gets exactly the fields it needs.
     """
-    container = str(raw["container"])
+    container = sanitize(str(raw["container"]))
     dossier = _coerce_dossier(raw.get("dossier"))
     if wire_type == "connection_blocked":
         return ClearanceEvent(
             type=wire_type,
             container=container,
-            request_id=str(raw["id"]),
-            dest=str(raw["dest"]),
+            request_id=sanitize(str(raw["id"])),
+            dest=sanitize(str(raw["dest"])),
             port=int(raw["port"]),
             proto=int(raw["proto"]),
-            domain=str(raw.get("domain", "")),
+            domain=sanitize(str(raw.get("domain", ""))),
             dossier=dossier,
         )
     if wire_type == "container_exited":
         return ClearanceEvent(
             type=wire_type,
             container=container,
-            reason=str(raw.get("reason", "")),
+            reason=sanitize(str(raw.get("reason", ""))),
             dossier=dossier,
         )
     return ClearanceEvent(type=wire_type, container=container, dossier=dossier)
 
 
 def _coerce_dossier(raw: object) -> Dossier:
-    """Pull a ``Dossier`` out of whatever the reader put on the wire.
+    """Pull a sanitised ``Dossier`` out of whatever the reader put on the wire.
 
     A missing or non-object payload normalises to ``{}`` rather than crashing
     the translator — the hub must absorb a misshaped event the same way it
-    drops malformed wire types.  Values are coerced via ``str()`` because the
-    upstream JSON allows numbers/bools/null and the renderer always wants
-    strings.
+    drops malformed wire types.  Values are coerced via ``str()`` (the upstream
+    JSON allows numbers/bools/null) and then sanitised so every consumer sees
+    printable-ASCII strings regardless of which producer emitted them.
     """
     if not isinstance(raw, dict):
         return {}
-    return {str(k): str(v) for k, v in raw.items()}
+    return sanitize_mapping({str(k): str(v) for k, v in raw.items()})
 
 
 def _own_version() -> str:

@@ -138,6 +138,82 @@ class TestTranslateReaderEvent:
         )
         assert event.dossier == {"port": "8080"}
 
+    def test_attacker_controlled_domain_is_sanitised(self) -> None:
+        """A crafted DNS name with control bytes loses them at the boundary."""
+        event = _translate_reader_event(
+            "connection_blocked",
+            {
+                "type": "pending",
+                "container": CONTAINER,
+                "id": f"{CONTAINER}:1",
+                "dest": DEST_IP,
+                "port": 443,
+                "proto": 6,
+                "domain": "evil\x1b[31mfake\x00.example.com",
+            },
+        )
+        # No control bytes survive.
+        assert "\x1b" not in event.domain
+        assert "\x00" not in event.domain
+        # Replacement positions stay aligned so the operator can still read it.
+        assert event.domain == "evil [31mfake .example.com"
+
+    def test_rtlo_in_domain_is_sanitised(self) -> None:
+        """RTLO override (a homoglyph attack) drops to a space — non-ASCII."""
+        event = _translate_reader_event(
+            "connection_blocked",
+            {
+                "type": "pending",
+                "container": CONTAINER,
+                "id": f"{CONTAINER}:1",
+                "dest": DEST_IP,
+                "port": 443,
+                "proto": 6,
+                "domain": "evil‮.com",
+            },
+        )
+        assert "‮" not in event.domain
+        assert event.domain == "evil .com"
+
+    def test_dossier_values_are_sanitised(self) -> None:
+        """Container-controlled dossier strings get the same printable-ASCII rule."""
+        event = _translate_reader_event(
+            "shield_up",
+            {
+                "type": "shield_up",
+                "container": CONTAINER,
+                "dossier": {"name": "p1\nProtocol: spoof", "task": "café"},
+            },
+        )
+        assert "\n" not in event.dossier["name"]
+        assert event.dossier["name"] == "p1 Protocol: spoof"
+        # Non-ASCII letters become spaces under the strict rule.
+        assert event.dossier["task"] == "caf "
+
+    def test_pango_markup_chars_pass_through(self) -> None:
+        """``& < >`` are printable ASCII — wire layer leaves them; renderer escapes."""
+        event = _translate_reader_event(
+            "connection_blocked",
+            {
+                "type": "pending",
+                "container": CONTAINER,
+                "id": f"{CONTAINER}:1",
+                "dest": DEST_IP,
+                "port": 443,
+                "proto": 6,
+                "domain": "<script>alert(1)</script>",
+            },
+        )
+        assert event.domain == "<script>alert(1)</script>"
+
+    def test_attacker_controlled_container_id_is_sanitised(self) -> None:
+        """``container`` field is also at the boundary — same rule applies."""
+        event = _translate_reader_event(
+            "shield_up",
+            {"type": "shield_up", "container": "tainted\x00name"},
+        )
+        assert event.container == "tainted name"
+
 
 # ── Live-verdict authz binding ────────────────────────────────────────
 
