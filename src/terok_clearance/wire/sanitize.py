@@ -65,7 +65,9 @@ def sanitize(value: str, *, max_len: int = DEFAULT_MAX_LEN) -> str:
     Non-printable / non-ASCII bytes become a single space; the
     resulting string is truncated to ``max_len`` characters with a
     trailing ``...`` if the cap actually fired.  Empty input
-    round-trips unchanged.
+    round-trips unchanged.  When *max_len* is itself shorter than the
+    truncation marker, the marker is clipped to fit so the post-
+    condition ``len(result) <= max_len`` always holds.
 
     Args:
         value: Raw string from a wire payload — assumed UTF-8 already
@@ -85,6 +87,8 @@ def sanitize(value: str, *, max_len: int = DEFAULT_MAX_LEN) -> str:
     cleaned = "".join(ch if _PRINTABLE_LO <= ord(ch) <= _PRINTABLE_HI else " " for ch in value)
     if len(cleaned) <= max_len:
         return cleaned
+    if max_len <= len(_TRUNCATION_MARKER):
+        return _TRUNCATION_MARKER[:max_len]
     return cleaned[: max_len - len(_TRUNCATION_MARKER)] + _TRUNCATION_MARKER
 
 

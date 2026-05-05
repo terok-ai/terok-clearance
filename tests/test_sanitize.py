@@ -65,9 +65,14 @@ class TestSanitize:
         assert sanitize("a & b") == "a & b"
 
     def test_rtlo_bidi_override_is_neutralised(self) -> None:
-        """U+202E and friends become spaces — closes a homoglyph attack."""
-        # The literal "evil‮.com" displays as "evil.live" on a bidi-aware terminal.
-        assert sanitize("evil‮.com") == "evil .com"
+        """U+202E and friends become spaces — closes a homoglyph attack.
+
+        The U+202E source byte is written as an explicit ``\\u202e`` escape
+        rather than a literal char so the file stays auditable and
+        Sonar-clean — the function under test still receives the same
+        codepoint at runtime.
+        """
+        assert sanitize("evil\u202e.com") == "evil .com"
 
     def test_length_cap_truncates_with_ascii_marker(self) -> None:
         """Truncation marker is three ASCII dots — itself printable ASCII."""
@@ -88,13 +93,27 @@ class TestSanitize:
 
     def test_combined_filters_apply(self) -> None:
         """Non-ASCII + control + length all apply when the input triggers each."""
-        raw = "<bad>\nname\t" + "x" * 1000
+        raw = "<bad>\nnäme\t" + "x" * 1000
         out = sanitize(raw, max_len=20)
-        # No control bytes survive; markup chars are still printable; length capped.
+        # Control bytes squashed to space, ``ä`` (non-ASCII) squashed to space,
+        # markup chars survive (printable ASCII), length capped at 20.
         assert "\n" not in out
         assert "\t" not in out
+        assert "ä" not in out
         assert len(out) == 20
         assert out.endswith("...")
+        # The non-ASCII squash sits between ``n`` and ``me`` — verifies the
+        # filter actually fired rather than passing the test by accident on
+        # control / length alone.
+        assert "n me" in out
+
+    def test_truncation_marker_clipped_when_max_len_smaller(self) -> None:
+        """Pathological tiny ``max_len`` still satisfies the length post-condition."""
+        # max_len smaller than the truncation marker — the marker itself is
+        # clipped so ``len(result) <= max_len`` always holds.
+        assert sanitize("x" * 100, max_len=2) == ".."
+        assert sanitize("x" * 100, max_len=1) == "."
+        assert sanitize("x" * 100, max_len=0) == ""
 
 
 class TestSanitizeMapping:

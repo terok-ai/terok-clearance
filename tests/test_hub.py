@@ -169,10 +169,10 @@ class TestTranslateReaderEvent:
                 "dest": DEST_IP,
                 "port": 443,
                 "proto": 6,
-                "domain": "evil‮.com",
+                "domain": "evil\u202e.com",
             },
         )
-        assert "‮" not in event.domain
+        assert "\u202e" not in event.domain
         assert event.domain == "evil .com"
 
     def test_dossier_values_are_sanitised(self) -> None:
