@@ -70,6 +70,16 @@ path = "terok_clearance.wire.errors"
 layer = "wire"
 depends_on = ["terok_clearance.wire.interface"]
 
+# Defensive sanitiser for strings crossing the reader → hub socket.
+# Pure functions (stdlib only) — sits in the wire layer because the
+# rule it enforces *is* the wire-format invariant; every consumer
+# (subscriber, hub, future operator UIs) inherits the guarantee
+# without having to climb back up to renderer-specific helpers.
+[[modules]]
+path = "terok_clearance.wire.sanitize"
+layer = "wire"
+depends_on = []
+
 
 # ── Infrastructure layer ────────────────────────────────────────────
 
@@ -77,15 +87,6 @@ depends_on = ["terok_clearance.wire.interface"]
 # notification tree; the three concrete backends are infrastructure.
 [[modules]]
 path = "terok_clearance.notifications.protocol"
-layer = "domain"
-depends_on = []
-
-# Defensive sanitiser for strings crossing the container → desktop
-# boundary.  Pure functions (stdlib only) — sits in the domain layer
-# so any consumer (subscriber, hub, future operator UIs) can apply it
-# without climbing the dep stack.
-[[modules]]
-path = "terok_clearance.notifications._sanitize"
 layer = "domain"
 depends_on = []
 

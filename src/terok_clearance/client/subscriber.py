@@ -32,7 +32,6 @@ from terok_clearance.domain.events import (
     ClearanceEvent,
     Dossier,
 )
-from terok_clearance.notifications._sanitize import sanitize_mapping
 
 if TYPE_CHECKING:
     from terok_clearance.notifications.protocol import Notifier
@@ -245,12 +244,13 @@ class EventSubscriber:
     async def _on_event(self, event: ClearanceEvent) -> None:
         """Route one event to the right handler by its ``type`` discriminator.
 
-        Dossier values are sanitised once at the boundary — every
-        downstream helper sees pre-escaped, length-capped strings, so
-        the rendering path can interpolate freely without each call
-        site re-running the boundary check.
+        Every string field on the event — dossier values, ``domain``,
+        ``dest``, ``container`` — already arrived sanitised: the hub
+        applies the wire-format invariant in
+        ``_translate_reader_event``.  The renderer can interpolate
+        freely without re-running the boundary check.
         """
-        dossier = sanitize_mapping(event.dossier)
+        dossier = event.dossier
         if event.type == "connection_blocked":
             await self._handle_connection_blocked(event, dossier)
         elif event.type == "verdict_applied":
@@ -288,8 +288,8 @@ class EventSubscriber:
         the verdict routes to the latest ``request_id`` because that's
         what the shield is blocking right now.
 
-        ``dossier`` arrives sanitised by [`_on_event`][terok_clearance.client.subscriber.EventSubscriber._on_event];
-        every downstream helper can interpolate it directly.
+        ``dossier`` arrives pre-sanitised from the hub's wire-format
+        boundary; every downstream helper can interpolate it directly.
         """
         target = event.domain or event.dest
         if not target:

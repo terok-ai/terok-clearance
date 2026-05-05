@@ -161,6 +161,26 @@ class TestDbusNotifierNotify:
             iface = mock_bus.get_proxy_object.return_value.get_interface.return_value
             assert iface.call_notify.call_args[0][2] == "dialog-warning"
 
+    async def test_pango_markup_escaped_in_summary_and_body(self, mock_bus: MagicMock):
+        """``& < >`` in caller-supplied strings are escaped just before D-Bus.
+
+        The wire-boundary sanitiser leaves these characters intact (they're
+        printable ASCII), so renderer-local escaping is the layered defence
+        that keeps gnome-shell from interpreting attacker bytes as Pango
+        markup.  Newlines (legitimate body separators) survive.
+        """
+        with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
+            notifier = DbusNotifier()
+            await notifier.notify(
+                "Blocked: <b>evil</b>",
+                "host: a&b\nProtocol: <i>TCP</i>",
+            )
+            iface = mock_bus.get_proxy_object.return_value.get_interface.return_value
+            call_args = iface.call_notify.call_args[0]
+            # Order matters: '&' is escaped first so '<' doesn't double-escape.
+            assert call_args[3] == "Blocked: &lt;b&gt;evil&lt;/b&gt;"
+            assert call_args[4] == "host: a&amp;b\nProtocol: &lt;i&gt;TCP&lt;/i&gt;"
+
     async def test_default_icon_is_shipped_logo_file(self) -> None:
         """The fallback icon resolves to a real on-disk ``terok-logo.png``."""
         from pathlib import Path
