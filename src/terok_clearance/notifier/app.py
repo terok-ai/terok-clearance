@@ -27,8 +27,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 
-from terok_clearance.client.subscriber import EventSubscriber
+from terok_clearance.client.subscriber import (
+    ALL_NOTIFY_CATEGORIES,
+    NOTIFY_BLOCKED,
+    NOTIFY_VERDICT,
+    EventSubscriber,
+)
 from terok_clearance.notifications.factory import create_notifier
 from terok_clearance.notifications.protocol import Notifier
 from terok_clearance.runtime.service import configure_logging, wait_for_shutdown_signal
@@ -40,12 +46,60 @@ _log = logging.getLogger(__name__)
 #: hung varlink stream) from burning systemd's stop-sigterm deadline.
 _CLEANUP_STEP_TIMEOUT_S = 2.0
 
+#: Environment variable that picks which notification categories
+#: render desktop popups.  Comma- (or whitespace-) separated list of
+#: names from [`ALL_NOTIFY_CATEGORIES`][terok_clearance.client.subscriber.ALL_NOTIFY_CATEGORIES].
+#: Unset → the default opt-in subset; empty string → silence every
+#: category (still subscribes to the hub but never calls ``notify()``);
+#: ``all`` → enable every recognised category.  Operators set this via
+#: a ``systemctl --user edit terok-clearance-notifier`` drop-in so the
+#: customisation survives ``terok setup`` reinstalls (the installer
+#: only ever rewrites the main unit file, never the ``<unit>.service.d/``
+#: directory).
+NOTIFY_EVENTS_ENV = "TEROK_CLEARANCE_NOTIFY_EVENTS"
+
+#: Default categories the notifier daemon subscribes to when the
+#: environment variable is unset.  Tuned to cover the operator's
+#: action loop ("here is a block, what's your verdict, here is the
+#: result") while keeping passive shield/container chatter out of the
+#: tray.
+DEFAULT_NOTIFY_CATEGORIES: frozenset[str] = frozenset({NOTIFY_BLOCKED, NOTIFY_VERDICT})
+
+
+def _parse_notify_categories(raw: str | None) -> frozenset[str]:
+    """Resolve the env var into a category set, log unknowns, drop them.
+
+    ``None`` (variable unset) falls back to
+    [`DEFAULT_NOTIFY_CATEGORIES`][terok_clearance.notifier.app.DEFAULT_NOTIFY_CATEGORIES];
+    the literal value ``all`` (case-insensitive) opts into every
+    category; an empty string silences every category.  Tokens are
+    comma- or whitespace-separated.  Unknown tokens are logged at
+    WARNING and dropped — the operator gets a journald breadcrumb
+    rather than a crashing notifier.
+    """
+    if raw is None:
+        return DEFAULT_NOTIFY_CATEGORIES
+    if raw.strip().lower() == "all":
+        return ALL_NOTIFY_CATEGORIES
+    tokens = {t.strip() for t in raw.replace(",", " ").split() if t.strip()}
+    unknown = tokens - ALL_NOTIFY_CATEGORIES
+    if unknown:
+        _log.warning(
+            "%s: ignoring unknown categories %s (recognised: %s)",
+            NOTIFY_EVENTS_ENV,
+            sorted(unknown),
+            sorted(ALL_NOTIFY_CATEGORIES),
+        )
+    return frozenset(tokens & ALL_NOTIFY_CATEGORIES)
+
 
 async def run_notifier() -> None:
     """Run the notifier until SIGINT/SIGTERM."""
     configure_logging()
+    categories = _parse_notify_categories(os.environ.get(NOTIFY_EVENTS_ENV))
+    _log.info("notify categories: %s", sorted(categories) or "<none>")
     notifier = await create_notifier("terok-clearance")
-    subscriber = EventSubscriber(notifier)
+    subscriber = EventSubscriber(notifier, enabled_categories=categories)
     try:
         await subscriber.start()
     except Exception:

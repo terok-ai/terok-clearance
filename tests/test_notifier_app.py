@@ -17,6 +17,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from terok_clearance.client.subscriber import (
+    ALL_NOTIFY_CATEGORIES,
+    NOTIFY_BLOCKED,
+    NOTIFY_CONTAINER_STARTED,
+    NOTIFY_SHIELD_DOWN,
+    NOTIFY_VERDICT,
+)
 from terok_clearance.notifier import app as notifier_app
 
 # ── _teardown ─────────────────────────────────────────────
@@ -140,3 +147,68 @@ async def test_run_notifier_swallows_notifier_disconnect_errors(
 
     with pytest.raises(SystemExit):
         await notifier_app.run_notifier()
+
+
+# ── _parse_notify_categories ─────────────────────────────
+
+
+class TestParseNotifyCategories:
+    """``TEROK_CLEARANCE_NOTIFY_EVENTS`` is the operator's category knob."""
+
+    def test_unset_returns_default_subset(self) -> None:
+        """Variable unset → the curated interactive default (blocked + verdict)."""
+        assert notifier_app._parse_notify_categories(None) == notifier_app.DEFAULT_NOTIFY_CATEGORIES
+        assert frozenset({NOTIFY_BLOCKED, NOTIFY_VERDICT}) == notifier_app.DEFAULT_NOTIFY_CATEGORIES
+
+    def test_empty_string_silences_every_popup(self) -> None:
+        """Operators can mute the daemon entirely with ``Environment="…=" ``."""
+        assert notifier_app._parse_notify_categories("") == frozenset()
+
+    def test_all_keyword_enables_every_category(self) -> None:
+        """A literal ``all`` (case-insensitive) opts back into the historical chatter."""
+        assert notifier_app._parse_notify_categories("all") == ALL_NOTIFY_CATEGORIES
+        assert notifier_app._parse_notify_categories("ALL") == ALL_NOTIFY_CATEGORIES
+
+    def test_comma_and_whitespace_separators_both_parse(self) -> None:
+        """Both shell-comma and whitespace tokens land in the same set."""
+        assert notifier_app._parse_notify_categories("blocked,verdict") == frozenset(
+            {NOTIFY_BLOCKED, NOTIFY_VERDICT}
+        )
+        assert notifier_app._parse_notify_categories("blocked verdict") == frozenset(
+            {NOTIFY_BLOCKED, NOTIFY_VERDICT}
+        )
+        assert notifier_app._parse_notify_categories(" blocked ,  shield_down ") == frozenset(
+            {NOTIFY_BLOCKED, NOTIFY_SHIELD_DOWN}
+        )
+
+    def test_unknown_tokens_are_dropped_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Typos don't crash the daemon — they're logged and discarded."""
+        with caplog.at_level("WARNING"):
+            result = notifier_app._parse_notify_categories("blocked,bogus,container_started")
+        assert result == frozenset({NOTIFY_BLOCKED, NOTIFY_CONTAINER_STARTED})
+        assert "bogus" in caplog.text
+
+
+async def test_run_notifier_passes_category_filter_to_subscriber(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The env-var subset reaches ``EventSubscriber.__init__`` as ``enabled_categories``."""
+    notifier = MagicMock(name="notifier")
+    notifier.disconnect = AsyncMock()
+    subscriber = MagicMock(name="subscriber")
+    subscriber.start = AsyncMock()
+    subscriber.stop = AsyncMock()
+    event_subscriber_ctor = MagicMock(return_value=subscriber)
+
+    monkeypatch.setenv(notifier_app.NOTIFY_EVENTS_ENV, "blocked verdict")
+    monkeypatch.setattr(notifier_app, "configure_logging", lambda: None)
+    monkeypatch.setattr(notifier_app, "create_notifier", AsyncMock(return_value=notifier))
+    monkeypatch.setattr(notifier_app, "EventSubscriber", event_subscriber_ctor)
+    monkeypatch.setattr(notifier_app, "wait_for_shutdown_signal", AsyncMock(return_value=None))
+
+    await notifier_app.run_notifier()
+    event_subscriber_ctor.assert_called_once()
+    kwargs = event_subscriber_ctor.call_args.kwargs
+    assert kwargs["enabled_categories"] == frozenset({NOTIFY_BLOCKED, NOTIFY_VERDICT})

@@ -86,7 +86,7 @@ Version history:
         minimum that doesn't break the shield re-exec).
 """
 
-_NOTIFIER_UNIT_VERSION = 4
+_NOTIFIER_UNIT_VERSION = 5
 """Version stamp for the standalone notifier unit.
 
 Kept independent of the hub/verdict pair so each install target can
@@ -95,6 +95,12 @@ shapes, different hardening profiles, and different dependencies on
 the session bus.
 
 Version history:
+    5 — comment block documenting the
+        ``TEROK_CLEARANCE_NOTIFY_EVENTS`` env var + recommended
+        ``systemctl --user edit`` drop-in workflow added to the unit
+        header.  Unit semantics unchanged but the bump nudges
+        operators on existing installs to refresh and pick up the
+        new in-file documentation.
     4 — version-stamp marker moves to line 1 (cross-package convention
         with terok-sandbox; line-1 ownership check is the contract).
     3 — ``ProtectHome=tmpfs`` + ``BindReadOnlyPaths=%h/.../pipx/...``
