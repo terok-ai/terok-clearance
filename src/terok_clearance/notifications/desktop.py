@@ -4,6 +4,7 @@
 """Desktop notifier backed by dbus-fast and the freedesktop Notifications spec."""
 
 import asyncio
+import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import IntEnum
@@ -11,6 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from dbus_fast.aio import MessageBus
+
+_log = logging.getLogger(__name__)
 
 #: Pango markup characters that gnome-shell parses inside notification
 #: summary / body strings.  Inputs reach this point already sanitised
@@ -43,6 +46,48 @@ def _pango_escape(text: str) -> str:
 BUS_NAME = "org.freedesktop.Notifications"
 OBJECT_PATH = "/org/freedesktop/Notifications"
 INTERFACE_NAME = "org.freedesktop.Notifications"
+
+#: Hand-rolled introspection XML for the freedesktop Notifications
+#: interface — the only methods + signals our notifier touches.  Used
+#: instead of a runtime ``bus.introspect()`` because the spec is fixed
+#: and some daemons (observed on certain GNOME-Shell versions) return
+#: introspection data missing the ``ActionInvoked`` /
+#: ``NotificationClosed`` signal nodes — which silently strips the
+#: ``on_action_invoked`` / ``on_notification_closed`` setattrs from
+#: the dbus_fast proxy interface and therefore the operator's clicks
+#: into the popup go nowhere while the send path keeps working.  The
+#: bug is environment-dependent; baking the spec means we don't
+#: depend on the daemon's introspection completeness.  Source: the
+#: freedesktop Desktop Notifications spec, sections 1.3 (methods) and
+#: 1.4 (signals).
+_NOTIFICATIONS_INTROSPECTION_XML = """\
+<node>
+  <interface name="org.freedesktop.Notifications">
+    <method name="Notify">
+      <arg type="s" name="app_name" direction="in"/>
+      <arg type="u" name="replaces_id" direction="in"/>
+      <arg type="s" name="app_icon" direction="in"/>
+      <arg type="s" name="summary" direction="in"/>
+      <arg type="s" name="body" direction="in"/>
+      <arg type="as" name="actions" direction="in"/>
+      <arg type="a{sv}" name="hints" direction="in"/>
+      <arg type="i" name="expire_timeout" direction="in"/>
+      <arg type="u" name="id" direction="out"/>
+    </method>
+    <method name="CloseNotification">
+      <arg type="u" name="id" direction="in"/>
+    </method>
+    <signal name="NotificationClosed">
+      <arg type="u" name="id"/>
+      <arg type="u" name="reason"/>
+    </signal>
+    <signal name="ActionInvoked">
+      <arg type="u" name="id"/>
+      <arg type="s" name="action_key"/>
+    </signal>
+  </interface>
+</node>
+"""
 
 
 class CloseReason(IntEnum):
@@ -116,13 +161,22 @@ class DbusNotifier:
                 return
             bus = await MessageBus().connect()
             try:
-                introspection = await bus.introspect(BUS_NAME, OBJECT_PATH)
-                proxy = bus.get_proxy_object(BUS_NAME, OBJECT_PATH, introspection)
+                # Build the proxy from a hand-rolled XML — the
+                # spec-defined shape — instead of a runtime introspect
+                # so signal registration works regardless of what the
+                # session daemon's Introspect happens to return.  See
+                # _NOTIFICATIONS_INTROSPECTION_XML for the rationale.
+                proxy = bus.get_proxy_object(
+                    BUS_NAME, OBJECT_PATH, _NOTIFICATIONS_INTROSPECTION_XML
+                )
                 iface = proxy.get_interface(INTERFACE_NAME)
-                if hasattr(iface, "on_action_invoked"):
-                    iface.on_action_invoked(self._handle_action)
-                if hasattr(iface, "on_notification_closed"):
-                    iface.on_notification_closed(self._handle_closed)
+                # The spec guarantees both signals; the previous
+                # ``hasattr`` guard covered for missing introspection
+                # but would silently mask a regression.  Subscribe
+                # unconditionally; an attribute error here is a real
+                # bug we want to see surface.
+                iface.on_action_invoked(self._handle_action)
+                iface.on_notification_closed(self._handle_closed)
             except BaseException:
                 # Catch ``BaseException`` so an ``asyncio.CancelledError``
                 # (``BaseException`` subclass on 3.11+) mid-handshake doesn't
@@ -130,11 +184,28 @@ class DbusNotifier:
                 bus.disconnect()
                 raise
             self._conn = _Connection(bus=bus, interface=iface)
+            _log.info(
+                "DbusNotifier connected as %r — ActionInvoked / NotificationClosed subscribed",
+                self._app_name,
+            )
 
     def _handle_action(self, notification_id: int, action_key: str) -> None:
         """Dispatch an ``ActionInvoked`` signal to the registered callback."""
-        if callback := self._callbacks.get(notification_id):
-            callback(action_key)
+        callback = self._callbacks.get(notification_id)
+        # Log at INFO so operators can confirm in journald that the
+        # daemon's ActionInvoked signal reached the notifier (and tell
+        # us which case fired): the silent failure mode this method
+        # used to permit was diagnostic-hostile because a missed click
+        # and a never-emitted signal looked identical.
+        if callback is None:
+            _log.info(
+                "ActionInvoked id=%d action=%r — no registered callback (popup expired?)",
+                notification_id,
+                action_key,
+            )
+            return
+        _log.info("ActionInvoked id=%d action=%r — dispatching", notification_id, action_key)
+        callback(action_key)
 
     def _handle_closed(self, notification_id: int, _reason: int) -> None:
         """Remove the callback for a closed notification."""

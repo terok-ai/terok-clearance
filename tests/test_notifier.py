@@ -72,13 +72,25 @@ class TestDbusNotifierConnect:
             iface.off_notification_closed.assert_called_once_with(notifier._handle_closed)
 
     async def test_connect_failure_disconnects_bus(self, mock_bus: MagicMock):
-        mock_bus.introspect = AsyncMock(side_effect=RuntimeError("boom"))
+        mock_bus.get_proxy_object = MagicMock(side_effect=RuntimeError("boom"))
         with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             with pytest.raises(RuntimeError, match="boom"):
                 await notifier.connect()
             mock_bus.disconnect.assert_called_once()
             assert notifier._conn is None
+
+    async def test_connect_does_not_call_bus_introspect(self, mock_bus: MagicMock):
+        """Spec-defined XML is hand-rolled — no runtime introspect call.
+
+        Some daemons return Introspect XML missing ActionInvoked /
+        NotificationClosed; relying on it silently dropped popup-action
+        signal subscription.  This guards the regression.
+        """
+        with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
+            notifier = DbusNotifier()
+            await notifier.connect()
+            mock_bus.introspect.assert_not_called()
 
     async def test_connect_and_notify_share_the_lock(self, mock_bus: MagicMock):
         """A ``connect()`` + ``notify()`` race must produce exactly one MessageBus."""
