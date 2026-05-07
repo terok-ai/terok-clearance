@@ -12,7 +12,7 @@ from terok_clearance.notifications.desktop import DbusNotifier
 
 
 def _mock_bus() -> MagicMock:
-    """Create a mock MessageBus with introspection and proxy wiring."""
+    """Create a mock MessageBus with proxy + signal-pipeline wiring."""
     iface = MagicMock()
     iface.call_notify = AsyncMock(return_value=7)
     iface.call_close_notification = AsyncMock()
@@ -24,7 +24,21 @@ def _mock_bus() -> MagicMock:
     bus.connect = AsyncMock(return_value=bus)
     bus.introspect = AsyncMock(return_value=MagicMock())
     bus.get_proxy_object.return_value = proxy
+    bus.add_message_handler = MagicMock()
+    bus.remove_message_handler = MagicMock()
+    # ``call`` is awaited inside ``_add_signal_match`` for AddMatch /
+    # RemoveMatch — return a fake ``METHOD_RETURN`` reply so the
+    # ``message_type == ERROR`` warning branch stays untriggered.
+    method_return = MagicMock()
+    method_return.message_type = MagicMock()
+    method_return.message_type.__eq__ = lambda _self, _other: False  # not ERROR
+    bus.call = AsyncMock(return_value=method_return)
     bus.disconnect = MagicMock()
+    # ``_dispatch_signal`` validates ``msg.sender`` against the bus's
+    # ``_name_owners`` cache for ``org.freedesktop.Notifications`` —
+    # populate the cache with the relay sender every test signal
+    # uses so the legitimate-sender path is exercised by default.
+    bus._name_owners = {"org.freedesktop.Notifications": ":1.30"}
 
     return bus
 
@@ -47,12 +61,24 @@ class TestDbusNotifierConnect:
             assert notifier._conn.bus is mock_bus
 
     async def test_connect_subscribes_to_signals(self, mock_bus: MagicMock):
+        """Signal pipeline wires a raw bus handler + AddMatch, not proxy on_*."""
         with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             await notifier.connect()
             iface = mock_bus.get_proxy_object.return_value.get_interface.return_value
-            iface.on_action_invoked.assert_called_once_with(notifier._handle_action)
-            iface.on_notification_closed.assert_called_once_with(notifier._handle_closed)
+            # Raw bus message handler — bypasses the proxy interface
+            # ``_message_handler`` filter that drops signals from
+            # relay-fronted senders.
+            mock_bus.add_message_handler.assert_called_once_with(notifier._dispatch_signal)
+            # AddMatch is dispatched via a ``bus.call(...)``; we don't
+            # assert its inner Message because that's a dbus-fast
+            # implementation detail, but we do pin that AddMatch was
+            # actually issued (without it the bus would only deliver
+            # signals targeted at our unique name, not broadcasts).
+            mock_bus.call.assert_awaited_once()
+            # Proxy ``on_*`` setattrs are no longer used.
+            iface.on_action_invoked.assert_not_called()
+            iface.on_notification_closed.assert_not_called()
 
     async def test_disconnect_clears_state(self, mock_bus: MagicMock):
         with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
@@ -63,22 +89,33 @@ class TestDbusNotifierConnect:
             assert notifier._callbacks == {}
 
     async def test_disconnect_unsubscribes_signals(self, mock_bus: MagicMock):
+        """Disconnect removes the raw bus handler before tearing down."""
         with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             await notifier.connect()
-            iface = mock_bus.get_proxy_object.return_value.get_interface.return_value
             await notifier.disconnect()
-            iface.off_action_invoked.assert_called_once_with(notifier._handle_action)
-            iface.off_notification_closed.assert_called_once_with(notifier._handle_closed)
+            mock_bus.remove_message_handler.assert_called_once_with(notifier._dispatch_signal)
 
     async def test_connect_failure_disconnects_bus(self, mock_bus: MagicMock):
-        mock_bus.introspect = AsyncMock(side_effect=RuntimeError("boom"))
+        mock_bus.get_proxy_object = MagicMock(side_effect=RuntimeError("boom"))
         with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
             notifier = DbusNotifier()
             with pytest.raises(RuntimeError, match="boom"):
                 await notifier.connect()
             mock_bus.disconnect.assert_called_once()
             assert notifier._conn is None
+
+    async def test_connect_does_not_call_bus_introspect(self, mock_bus: MagicMock):
+        """Spec-defined XML is hand-rolled — no runtime introspect call.
+
+        Some daemons return Introspect XML missing ActionInvoked /
+        NotificationClosed; relying on it silently dropped popup-action
+        signal subscription.  This guards the regression.
+        """
+        with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
+            notifier = DbusNotifier()
+            await notifier.connect()
+            mock_bus.introspect.assert_not_called()
 
     async def test_connect_and_notify_share_the_lock(self, mock_bus: MagicMock):
         """A ``connect()`` + ``notify()`` race must produce exactly one MessageBus."""
@@ -231,3 +268,95 @@ class TestDbusNotifierActions:
             assert 7 not in notifier._callbacks
             iface = mock_bus.get_proxy_object.return_value.get_interface.return_value
             iface.call_close_notification.assert_awaited_once_with(7)
+
+
+def _signal_msg(member: str, body: list, *, sender: str = ":1.30") -> MagicMock:
+    """Build a fake dbus_fast Message resembling an ActionInvoked signal."""
+    from dbus_fast import MessageType
+
+    msg = MagicMock()
+    msg.message_type = MessageType.SIGNAL
+    msg.interface = "org.freedesktop.Notifications"
+    msg.path = "/org/freedesktop/Notifications"
+    msg.member = member
+    msg.body = body
+    msg.sender = sender
+    return msg
+
+
+class TestDispatchSignal:
+    """Raw bus dispatcher: regression coverage for the relay-fronted bug.
+
+    The original bug had ``ActionInvoked`` signals arriving from a
+    relay's unique name (``:1.30``) — neither equal to the well-known
+    ``org.freedesktop.Notifications`` nor present in the bus's
+    ``_name_owners`` cache for that name — and dbus_fast's proxy
+    silently dropped every one.  These tests pin that the new
+    dispatcher is sender-agnostic and that filtering is purely on
+    interface + path + member.
+    """
+
+    async def test_action_invoked_dispatches_regardless_of_sender(
+        self, mock_bus: MagicMock
+    ) -> None:
+        """The exact symptom reproduced in dbus-monitor traces."""
+        with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
+            notifier = DbusNotifier()
+            await notifier.connect()
+            cb = MagicMock()
+            await notifier.on_action(21, cb)
+            # Sender is the relay's unique name — exactly the case
+            # that used to be filtered out.
+            notifier._dispatch_signal(_signal_msg("ActionInvoked", [21, "allow"], sender=":1.30"))
+            cb.assert_called_once_with("allow")
+
+    async def test_notification_closed_dispatches(self, mock_bus: MagicMock) -> None:
+        with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
+            notifier = DbusNotifier()
+            await notifier.connect()
+            await notifier.on_action(21, MagicMock())
+            notifier._dispatch_signal(_signal_msg("NotificationClosed", [21, 1]))
+            assert 21 not in notifier._callbacks
+
+    async def test_other_interface_signals_ignored(self, mock_bus: MagicMock) -> None:
+        """A signal on a different interface must not poison our state."""
+        with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
+            notifier = DbusNotifier()
+            await notifier.connect()
+            cb = MagicMock()
+            await notifier.on_action(21, cb)
+            stray = _signal_msg("ActionInvoked", [21, "allow"])
+            stray.interface = "org.example.Other"
+            notifier._dispatch_signal(stray)
+            cb.assert_not_called()
+
+    async def test_malformed_body_does_not_raise(self, mock_bus: MagicMock) -> None:
+        """A truncated ActionInvoked body is logged and ignored — never raised."""
+        with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
+            notifier = DbusNotifier()
+            await notifier.connect()
+            await notifier.on_action(21, MagicMock())
+            notifier._dispatch_signal(_signal_msg("ActionInvoked", [21]))  # too few
+
+    async def test_signal_from_unauthenticated_sender_rejected(self, mock_bus: MagicMock) -> None:
+        """A spoofed signal from a peer that doesn't own the well-known name is dropped."""
+        with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
+            notifier = DbusNotifier()
+            await notifier.connect()
+            cb = MagicMock()
+            await notifier.on_action(21, cb)
+            # Mock cache says the legitimate owner is ``:1.30`` (default
+            # in the fixture); the signal arrives from a different peer.
+            notifier._dispatch_signal(_signal_msg("ActionInvoked", [21, "allow"], sender=":1.999"))
+            cb.assert_not_called()
+
+    async def test_signal_rejected_when_owner_not_yet_resolved(self, mock_bus: MagicMock) -> None:
+        """If the bus hasn't populated the owner cache yet, drop the signal."""
+        mock_bus._name_owners = {}
+        with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
+            notifier = DbusNotifier()
+            await notifier.connect()
+            cb = MagicMock()
+            await notifier.on_action(21, cb)
+            notifier._dispatch_signal(_signal_msg("ActionInvoked", [21, "allow"]))
+            cb.assert_not_called()
