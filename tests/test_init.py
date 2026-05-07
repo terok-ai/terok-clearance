@@ -64,6 +64,13 @@ class TestCreateNotifier:
         proxy = MagicMock()
         proxy.get_interface.return_value = MagicMock()
         mock_bus.get_proxy_object.return_value = proxy
+        # ``connect()`` now sends an AddMatch via ``bus.call`` to wire
+        # up the raw signal handler — return a stub method-return so
+        # the AddMatch awaitable resolves.
+        method_return = MagicMock()
+        method_return.message_type = MagicMock()
+        method_return.message_type.__eq__ = lambda _self, _other: False
+        mock_bus.call = AsyncMock(return_value=method_return)
 
         with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
             notifier = await create_notifier("test")

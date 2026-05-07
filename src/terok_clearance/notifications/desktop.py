@@ -11,6 +11,7 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Any
 
+from dbus_fast import Message, MessageType
 from dbus_fast.aio import MessageBus
 
 _log = logging.getLogger(__name__)
@@ -141,6 +142,20 @@ class DbusNotifier:
         app_name: Application name sent with every notification.
     """
 
+    #: Sender-agnostic match rule for the two notification signals we
+    #: subscribe to.  Strict ``key='value'`` quoting (per the D-Bus
+    #: spec § Match-Rule Syntax) so dbus-broker — which rejects
+    #: unquoted values — accepts it as readily as the more lenient
+    #: reference daemon.  No ``sender=`` filter is set, by design: on
+    #: relay-fronted setups (e.g. xdg-desktop-portal in front of GNOME
+    #: Shell) the well-known name ``org.freedesktop.Notifications`` is
+    #: owned by the relay's unique name, while ``ActionInvoked`` /
+    #: ``NotificationClosed`` arrive from whatever the relay forwards
+    #: through.  Filtering on path + interface is enough — we control
+    #: which path the proxy is on and the interface name is unique to
+    #: the spec.
+    _SIGNAL_MATCH_RULE = f"type='signal',interface='{INTERFACE_NAME}',path='{OBJECT_PATH}'"
+
     def __init__(self, app_name: str = "terok") -> None:
         """Initialise with the given application name."""
         self._app_name = app_name
@@ -163,20 +178,32 @@ class DbusNotifier:
             try:
                 # Build the proxy from a hand-rolled XML — the
                 # spec-defined shape — instead of a runtime introspect
-                # so signal registration works regardless of what the
-                # session daemon's Introspect happens to return.  See
-                # _NOTIFICATIONS_INTROSPECTION_XML for the rationale.
+                # so the method-call surface (``call_notify``,
+                # ``call_close_notification``) is available without a
+                # round-trip and without depending on what the session
+                # daemon's Introspect happens to return.
                 proxy = bus.get_proxy_object(
                     BUS_NAME, OBJECT_PATH, _NOTIFICATIONS_INTROSPECTION_XML
                 )
                 iface = proxy.get_interface(INTERFACE_NAME)
-                # The spec guarantees both signals; the previous
-                # ``hasattr`` guard covered for missing introspection
-                # but would silently mask a regression.  Subscribe
-                # unconditionally; an attribute error here is a real
-                # bug we want to see surface.
-                iface.on_action_invoked(self._handle_action)
-                iface.on_notification_closed(self._handle_closed)
+                # Subscribe via a raw bus message handler instead of
+                # the proxy's ``on_<signal>`` setattrs.  dbus_fast's
+                # proxy interface filters incoming signals on a
+                # ``msg.sender == bus._name_owners[bus_name]`` check
+                # — which silently drops every ``ActionInvoked`` on
+                # relay-fronted setups (xdg-desktop-portal in front
+                # of GNOME Shell, for one) where the well-known
+                # ``org.freedesktop.Notifications`` is owned by the
+                # relay but signals arrive from whichever process
+                # the relay forwards through.  The send path
+                # (``call_notify``) is unaffected by that filter,
+                # which is exactly the asymmetric symptom that
+                # produced this fix: popups appear, button clicks
+                # vanish.  A raw handler + a sender-agnostic match
+                # rule ([`_SIGNAL_MATCH_RULE`][terok_clearance.notifications.desktop.DbusNotifier._SIGNAL_MATCH_RULE])
+                # bypasses ``_name_owners`` entirely.
+                bus.add_message_handler(self._dispatch_signal)
+                await self._add_signal_match(bus)
             except BaseException:
                 # Catch ``BaseException`` so an ``asyncio.CancelledError``
                 # (``BaseException`` subclass on 3.11+) mid-handshake doesn't
@@ -188,6 +215,61 @@ class DbusNotifier:
                 "DbusNotifier connected as %r — ActionInvoked / NotificationClosed subscribed",
                 self._app_name,
             )
+
+    async def _add_signal_match(self, bus: MessageBus) -> None:
+        """Register our signal match rule with the bus daemon.
+
+        Logs at WARNING and continues if the bus refuses the rule —
+        the notifier still produces popups in that degraded state,
+        which beats an exception that takes the whole daemon down.
+        """
+        reply = await bus.call(
+            Message(
+                destination="org.freedesktop.DBus",
+                interface="org.freedesktop.DBus",
+                path="/org/freedesktop/DBus",
+                member="AddMatch",
+                signature="s",
+                body=[self._SIGNAL_MATCH_RULE],
+            )
+        )
+        if reply is not None and reply.message_type == MessageType.ERROR:
+            _log.warning(
+                "AddMatch refused for %r: %s — popup actions will not be received",
+                self._SIGNAL_MATCH_RULE,
+                reply.body,
+            )
+
+    def _dispatch_signal(self, msg: Message) -> None:
+        """Filter incoming bus messages and dispatch the two we care about.
+
+        Returns ``None`` so dbus_fast keeps routing the message to
+        any other registered handlers.  Filters here intentionally
+        permissive on sender — any process emitting ``ActionInvoked``
+        or ``NotificationClosed`` on the spec path/interface gets
+        through, because that's the only signature we control on
+        relay-fronted setups.
+        """
+        if (
+            msg.message_type != MessageType.SIGNAL
+            or msg.interface != INTERFACE_NAME
+            or msg.path != OBJECT_PATH
+        ):
+            return
+        if msg.member == "ActionInvoked":
+            try:
+                nid, action_key = msg.body
+            except ValueError:
+                _log.warning("ActionInvoked with unexpected body: %r", msg.body)
+                return
+            self._handle_action(int(nid), str(action_key))
+        elif msg.member == "NotificationClosed":
+            try:
+                nid, reason = msg.body
+            except ValueError:
+                _log.warning("NotificationClosed with unexpected body: %r", msg.body)
+                return
+            self._handle_closed(int(nid), int(reason))
 
     def _handle_action(self, notification_id: int, action_key: str) -> None:
         """Dispatch an ``ActionInvoked`` signal to the registered callback."""
@@ -283,10 +365,12 @@ class DbusNotifier:
         conn = self._conn
         if conn is None:
             return
-        if hasattr(conn.interface, "off_action_invoked"):
-            conn.interface.off_action_invoked(self._handle_action)
-        if hasattr(conn.interface, "off_notification_closed"):
-            conn.interface.off_notification_closed(self._handle_closed)
+        try:
+            conn.bus.remove_message_handler(self._dispatch_signal)
+        except Exception:
+            # Best-effort: a torn-down bus already dropped its handler
+            # registry, and we're disconnecting anyway.
+            _log.debug("remove_message_handler raised during disconnect", exc_info=True)
         conn.bus.disconnect()
         self._conn = None
         self._callbacks.clear()
