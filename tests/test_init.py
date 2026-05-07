@@ -71,6 +71,7 @@ class TestCreateNotifier:
         method_return.message_type = MagicMock()
         method_return.message_type.__eq__ = lambda _self, _other: False
         mock_bus.call = AsyncMock(return_value=method_return)
+        mock_bus._name_owners = {}
 
         with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
             notifier = await create_notifier("test")

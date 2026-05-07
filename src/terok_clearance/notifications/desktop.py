@@ -203,6 +203,14 @@ class DbusNotifier:
                 # rule ([`_SIGNAL_MATCH_RULE`][terok_clearance.notifications.desktop.DbusNotifier._SIGNAL_MATCH_RULE])
                 # bypasses ``_name_owners`` entirely.
                 bus.add_message_handler(self._dispatch_signal)
+                # Diagnostic: confirm the handler actually landed in the
+                # bus's handler list.  ``getattr`` defends against future
+                # dbus_fast renames of the private cache.
+                handler_count = len(getattr(bus, "_user_message_handlers", []))
+                _log.info(
+                    "registered _dispatch_signal — bus has %d user handler(s)",
+                    handler_count,
+                )
                 await self._add_signal_match(bus)
             except BaseException:
                 # Catch ``BaseException`` so an ``asyncio.CancelledError``
@@ -239,22 +247,58 @@ class DbusNotifier:
                 self._SIGNAL_MATCH_RULE,
                 reply.body,
             )
+            return
+        _log.info("AddMatch accepted for %r", self._SIGNAL_MATCH_RULE)
 
     def _dispatch_signal(self, msg: Message) -> None:
         """Filter incoming bus messages and dispatch the two we care about.
 
         Returns ``None`` so dbus_fast keeps routing the message to
-        any other registered handlers.  Filters here intentionally
-        permissive on sender — any process emitting ``ActionInvoked``
-        or ``NotificationClosed`` on the spec path/interface gets
-        through, because that's the only signature we control on
-        relay-fronted setups.
+        any other registered handlers.  The filter is in two layers:
+
+        1. **Spec-shape guard.**  Drop anything that isn't a signal on
+           our path + interface — that's noise from other handlers
+           sharing the bus connection.
+        2. **Authenticated-sender guard.**  Compare ``msg.sender``
+           against the bus's resolved unique-name owner of
+           ``org.freedesktop.Notifications`` (populated automatically
+           on every reply we receive from the daemon, including the
+           ``Notify`` we always make before the first action arrives,
+           and kept current by the bus's ``NameOwnerChanged``
+           subscription).  Any mismatch is a local peer trying to
+           spoof a verdict — log + drop.
+
+        We do this in code rather than via a ``sender=`` clause on
+        the AddMatch rule because match-rule sender filters resolve
+        once at AddMatch time on some bus daemons and don't follow
+        ownership churn; on relay topologies (xdg-desktop-portal in
+        front of GNOME Shell, observed in the wild) the runtime
+        cache is the only source of truth that tracks the relay's
+        unique name correctly.
+
+        INFO-level logging on every signal we accept gives the
+        operator a journald breadcrumb confirming the dispatch path
+        is alive — silent failure was diagnostic-hostile and turning
+        every popup-action investigation into a dbus-monitor session.
         """
         if (
             msg.message_type != MessageType.SIGNAL
             or msg.interface != INTERFACE_NAME
             or msg.path != OBJECT_PATH
         ):
+            return
+        # Diagnostic — fires for every notifications-iface signal we
+        # see, before any further filtering.  When the dispatch path
+        # is broken (e.g. the bus reader stalls or the message
+        # handler isn't actually wired up) the absence of this log on
+        # a click is the giveaway.
+        _log.info(
+            "notifications signal received: member=%r sender=%r body=%r",
+            msg.member,
+            msg.sender,
+            msg.body,
+        )
+        if not self._sender_is_authentic(msg):
             return
         if msg.member == "ActionInvoked":
             try:
@@ -270,6 +314,39 @@ class DbusNotifier:
                 _log.warning("NotificationClosed with unexpected body: %r", msg.body)
                 return
             self._handle_closed(int(nid), int(reason))
+
+    def _sender_is_authentic(self, msg: Message) -> bool:
+        """Reject signals that don't come from the resolved Notifications owner.
+
+        See [`_dispatch_signal`][terok_clearance.notifications.desktop.DbusNotifier._dispatch_signal]
+        for the threat model.  Returns ``True`` to authorize dispatch,
+        ``False`` to drop with a WARNING-level breadcrumb.
+        """
+        if self._conn is None:
+            return False
+        # ``_name_owners`` is populated on every method-call reply
+        # destined for a well-known name — guaranteed to hold our key
+        # by the time the daemon emits the first ``ActionInvoked``,
+        # because we always ``Notify`` first.  ``getattr`` defends
+        # against future dbus_fast renames of the private cache.
+        owners: Mapping[str, str] = getattr(self._conn.bus, "_name_owners", {})
+        expected = owners.get(BUS_NAME, "")
+        if not expected:
+            _log.warning(
+                "rejecting %s: bus has not resolved %r owner yet",
+                msg.member,
+                BUS_NAME,
+            )
+            return False
+        if msg.sender != expected:
+            _log.warning(
+                "rejecting %s from %r (expected %r — possible local-bus spoof)",
+                msg.member,
+                msg.sender,
+                expected,
+            )
+            return False
+        return True
 
     def _handle_action(self, notification_id: int, action_key: str) -> None:
         """Dispatch an ``ActionInvoked`` signal to the registered callback."""

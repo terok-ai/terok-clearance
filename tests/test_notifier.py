@@ -34,6 +34,11 @@ def _mock_bus() -> MagicMock:
     method_return.message_type.__eq__ = lambda _self, _other: False  # not ERROR
     bus.call = AsyncMock(return_value=method_return)
     bus.disconnect = MagicMock()
+    # ``_dispatch_signal`` validates ``msg.sender`` against the bus's
+    # ``_name_owners`` cache for ``org.freedesktop.Notifications`` —
+    # populate the cache with the relay sender every test signal
+    # uses so the legitimate-sender path is exercised by default.
+    bus._name_owners = {"org.freedesktop.Notifications": ":1.30"}
 
     return bus
 
@@ -332,3 +337,26 @@ class TestDispatchSignal:
             await notifier.connect()
             await notifier.on_action(21, MagicMock())
             notifier._dispatch_signal(_signal_msg("ActionInvoked", [21]))  # too few
+
+    async def test_signal_from_unauthenticated_sender_rejected(self, mock_bus: MagicMock) -> None:
+        """A spoofed signal from a peer that doesn't own the well-known name is dropped."""
+        with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
+            notifier = DbusNotifier()
+            await notifier.connect()
+            cb = MagicMock()
+            await notifier.on_action(21, cb)
+            # Mock cache says the legitimate owner is ``:1.30`` (default
+            # in the fixture); the signal arrives from a different peer.
+            notifier._dispatch_signal(_signal_msg("ActionInvoked", [21, "allow"], sender=":1.999"))
+            cb.assert_not_called()
+
+    async def test_signal_rejected_when_owner_not_yet_resolved(self, mock_bus: MagicMock) -> None:
+        """If the bus hasn't populated the owner cache yet, drop the signal."""
+        mock_bus._name_owners = {}
+        with patch("terok_clearance.notifications.desktop.MessageBus", return_value=mock_bus):
+            notifier = DbusNotifier()
+            await notifier.connect()
+            cb = MagicMock()
+            await notifier.on_action(21, cb)
+            notifier._dispatch_signal(_signal_msg("ActionInvoked", [21, "allow"]))
+            cb.assert_not_called()
