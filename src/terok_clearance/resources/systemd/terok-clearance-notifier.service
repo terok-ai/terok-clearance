@@ -23,6 +23,35 @@
 #
 # Logs:
 #   journalctl --user -u terok-clearance-notifier -f
+#
+# Customise which event categories produce desktop popups via a
+# drop-in override (drop-ins live under
+# ~/.config/systemd/user/terok-clearance-notifier.service.d/ and are
+# never rewritten by `terok setup` reinstalls):
+#
+#   systemctl --user edit terok-clearance-notifier
+#
+# Then add, e.g.:
+#
+#   [Service]
+#   Environment="TEROK_CLEARANCE_NOTIFY_EVENTS=blocked verdict shield_down"
+#
+# Recognised category names:
+#   blocked            — Allow/Deny prompts for newly-blocked connections
+#   verdict            — Allowed/Denied result popups (acks of a verdict)
+#   shield_up          — "Shield up" confirmation popups
+#   shield_down        — "Shield down" / full-bypass security alerts
+#   container_started  — "Container started" lifecycle popups
+#   container_exited   — "Container stopped" lifecycle popups
+#
+# Special values:
+#   <unset>            — default opt-in: blocked, verdict
+#   all                — every recognised category
+#   ""  (empty)        — silence every popup (subscriber stays connected)
+#
+# Apply changes with:
+#   systemctl --user daemon-reload
+#   systemctl --user restart terok-clearance-notifier
 
 [Unit]
 Description=terok clearance desktop notifier

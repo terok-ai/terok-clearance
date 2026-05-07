@@ -14,6 +14,7 @@ class TestPublicApi:
 
     def test_all_exports(self):
         expected = {
+            "ALL_NOTIFY_CATEGORIES",
             "CLEARANCE_INTERFACE_NAME",
             "CallbackNotifier",
             "Clearance1Interface",
@@ -23,6 +24,12 @@ class TestPublicApi:
             "DbusNotifier",
             "EventSubscriber",
             "InvalidAction",
+            "NOTIFY_BLOCKED",
+            "NOTIFY_CONTAINER_EXITED",
+            "NOTIFY_CONTAINER_STARTED",
+            "NOTIFY_SHIELD_DOWN",
+            "NOTIFY_SHIELD_UP",
+            "NOTIFY_VERDICT",
             "Notification",
             "Notifier",
             "NullNotifier",

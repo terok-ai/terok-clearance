@@ -13,6 +13,7 @@ notifier it drives.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -22,6 +23,11 @@ from terok_clearance.client.subscriber import (
     _HINT_CONFIRMATION,
     _HINT_LIFECYCLE,
     _HINT_SECURITY_ALERT,
+    ALL_NOTIFY_CATEGORIES,
+    NOTIFY_BLOCKED,
+    NOTIFY_CONTAINER_STARTED,
+    NOTIFY_SHIELD_DOWN,
+    NOTIFY_VERDICT,
     EventSubscriber,
 )
 from terok_clearance.domain.events import ClearanceEvent
@@ -429,3 +435,166 @@ class TestDossierRendering:
         call = mock_notifier.notify.await_args
         assert "original" in call.args[1]
         assert "renamed" not in call.args[1]
+
+
+# ── category gating ──────────────────────────────────────────────────
+
+
+@pytest.fixture
+def filtered_subscriber_factory(
+    mock_notifier: AsyncMock,
+) -> Callable[[set[str]], EventSubscriber]:
+    """Build a subscriber with a custom ``enabled_categories`` allowlist."""
+
+    def _make(categories: set[str]) -> EventSubscriber:
+        client = MagicMock()
+        client.start = AsyncMock()
+        client.stop = AsyncMock()
+        client.verdict = AsyncMock(return_value=True)
+        return EventSubscriber(mock_notifier, client=client, enabled_categories=categories)
+
+    return _make
+
+
+class TestEnabledCategories:
+    """``enabled_categories`` gates which events render desktop popups."""
+
+    @pytest.mark.asyncio
+    async def test_default_none_keeps_every_category(self, mock_notifier: AsyncMock) -> None:
+        """``enabled_categories=None`` matches the historical render-everything default."""
+        client = MagicMock()
+        client.start = AsyncMock()
+        client.stop = AsyncMock()
+        sub = EventSubscriber(mock_notifier, client=client)
+        assert sub._enabled_categories == ALL_NOTIFY_CATEGORIES
+
+    @pytest.mark.asyncio
+    async def test_unknown_category_is_silently_dropped(self, mock_notifier: AsyncMock) -> None:
+        """Caller noise (typos in category names) shouldn't poison the set."""
+        client = MagicMock()
+        client.start = AsyncMock()
+        sub = EventSubscriber(
+            mock_notifier,
+            client=client,
+            enabled_categories={NOTIFY_BLOCKED, "totally-not-a-category"},
+        )
+        assert sub._enabled_categories == frozenset({NOTIFY_BLOCKED})
+
+    @pytest.mark.asyncio
+    async def test_empty_set_silences_every_popup(
+        self,
+        filtered_subscriber_factory: Callable[[set[str]], EventSubscriber],
+        mock_notifier: AsyncMock,
+    ) -> None:
+        """An operator who passes an empty set gets a fully muted notifier."""
+        sub = filtered_subscriber_factory(set())
+        for event in (
+            _blocked(),
+            ClearanceEvent(type="container_started", container=CONTAINER),
+            ClearanceEvent(type="container_exited", container=CONTAINER, reason="poststop"),
+            ClearanceEvent(type="shield_up", container=CONTAINER),
+            ClearanceEvent(type="shield_down", container=CONTAINER),
+        ):
+            await sub._on_event(event)
+        for _ in range(3):
+            await asyncio.sleep(0)
+        mock_notifier.notify.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_blocked_disabled_skips_prompt_and_pending_state(
+        self,
+        filtered_subscriber_factory: Callable[[set[str]], EventSubscriber],
+        mock_notifier: AsyncMock,
+    ) -> None:
+        """Without the ``blocked`` category there's no popup and nothing pending."""
+        sub = filtered_subscriber_factory({NOTIFY_VERDICT})
+        await sub._on_event(_blocked())
+        mock_notifier.notify.assert_not_called()
+        assert sub._pending == {}
+
+    @pytest.mark.asyncio
+    async def test_verdict_disabled_still_pops_pending_state(
+        self,
+        filtered_subscriber_factory: Callable[[set[str]], EventSubscriber],
+        mock_notifier: AsyncMock,
+    ) -> None:
+        """Silenced verdict popups must still drain the pending dict — no leak."""
+        sub = filtered_subscriber_factory({NOTIFY_BLOCKED})
+        await sub._on_event(_blocked())
+        assert f"{CONTAINER}:1" in sub._pending
+        mock_notifier.notify.reset_mock()
+        await sub._on_event(
+            ClearanceEvent(
+                type="verdict_applied",
+                container=CONTAINER,
+                request_id=f"{CONTAINER}:1",
+                action="allow",
+                ok=True,
+            )
+        )
+        mock_notifier.notify.assert_not_called()
+        assert f"{CONTAINER}:1" not in sub._pending
+
+    @pytest.mark.asyncio
+    async def test_lifecycle_categories_silence_passive_popups_individually(
+        self,
+        filtered_subscriber_factory: Callable[[set[str]], EventSubscriber],
+        mock_notifier: AsyncMock,
+    ) -> None:
+        """Each lifecycle category toggles independently of the others."""
+        sub = filtered_subscriber_factory({NOTIFY_CONTAINER_STARTED})
+        for event in (
+            ClearanceEvent(type="container_started", container=CONTAINER),
+            ClearanceEvent(type="container_exited", container=CONTAINER, reason="poststop"),
+            ClearanceEvent(type="shield_up", container=CONTAINER),
+            ClearanceEvent(type="shield_down", container=CONTAINER),
+        ):
+            await sub._on_event(event)
+        for _ in range(3):
+            await asyncio.sleep(0)
+        titles = [c.args[0] for c in mock_notifier.notify.await_args_list]
+        assert any(t.startswith("Container started:") for t in titles)
+        assert not any(t.startswith("Container stopped:") for t in titles)
+        assert not any(t.startswith("Shield up:") for t in titles)
+        assert not any(t.startswith("Shield down:") for t in titles)
+
+    @pytest.mark.asyncio
+    async def test_shield_up_closes_stale_down_popup_even_when_disabled(
+        self,
+        filtered_subscriber_factory: Callable[[set[str]], EventSubscriber],
+        mock_notifier: AsyncMock,
+    ) -> None:
+        """Stale ShieldDown cleanup is a security concern — never gated."""
+        sub = filtered_subscriber_factory({NOTIFY_SHIELD_DOWN})
+        sub._shield_down_notifs[CONTAINER] = 77
+        await sub._on_event(ClearanceEvent(type="shield_up", container=CONTAINER))
+        for _ in range(3):
+            await asyncio.sleep(0)
+        mock_notifier.close.assert_awaited_once_with(77)
+        assert CONTAINER not in sub._shield_down_notifs
+        # No "Shield up: …" confirmation rendered.
+        assert not any(
+            c.args[0].startswith("Shield up:") for c in mock_notifier.notify.await_args_list
+        )
+
+    @pytest.mark.asyncio
+    async def test_container_exit_purges_pending_even_when_lifecycle_disabled(
+        self,
+        filtered_subscriber_factory: Callable[[set[str]], EventSubscriber],
+        mock_notifier: AsyncMock,
+    ) -> None:
+        """Pending purge runs for state hygiene regardless of popup gating."""
+        sub = filtered_subscriber_factory({NOTIFY_BLOCKED})
+        await sub._on_event(_blocked())
+        assert f"{CONTAINER}:1" in sub._pending
+        mock_notifier.notify.reset_mock()
+        await sub._on_event(
+            ClearanceEvent(type="container_exited", container=CONTAINER, reason="poststop")
+        )
+        for _ in range(3):
+            await asyncio.sleep(0)
+        # No "Container stopped: …" popup rendered.
+        assert not any(
+            c.args[0].startswith("Container stopped:") for c in mock_notifier.notify.await_args_list
+        )
+        assert f"{CONTAINER}:1" not in sub._pending

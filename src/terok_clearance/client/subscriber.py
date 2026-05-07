@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Coroutine
+from collections.abc import Coroutine, Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -37,6 +37,46 @@ if TYPE_CHECKING:
     from terok_clearance.notifications.protocol import Notifier
 
 _log = logging.getLogger(__name__)
+
+# ── Notification categories ───────────────────────────────────────────
+#
+# Public, stable string IDs callers use to opt in and out of specific
+# popup classes via ``EventSubscriber(enabled_categories=...)``.  The
+# desktop notifier daemon parses the ``TEROK_CLEARANCE_NOTIFY_EVENTS``
+# environment variable into a subset of these names; the in-TUI
+# subscriber leaves the parameter unset and gets every category, which
+# preserves the historical "render everything" behaviour for any
+# embedded consumer that has its own filtering layer.
+
+NOTIFY_BLOCKED = "blocked"
+"""Category for ``connection_blocked`` Allow/Deny prompts (interactive)."""
+
+NOTIFY_VERDICT = "verdict"
+"""Category for ``verdict_applied`` resolution popups (ack of a verdict)."""
+
+NOTIFY_SHIELD_UP = "shield_up"
+"""Category for ``ShieldUp`` confirmation popups."""
+
+NOTIFY_SHIELD_DOWN = "shield_down"
+"""Category for ``ShieldDown`` / ``ShieldDownAll`` security-alert popups."""
+
+NOTIFY_CONTAINER_STARTED = "container_started"
+"""Category for ``ContainerStarted`` lifecycle popups."""
+
+NOTIFY_CONTAINER_EXITED = "container_exited"
+"""Category for ``ContainerExited`` lifecycle popups."""
+
+ALL_NOTIFY_CATEGORIES: frozenset[str] = frozenset(
+    {
+        NOTIFY_BLOCKED,
+        NOTIFY_VERDICT,
+        NOTIFY_SHIELD_UP,
+        NOTIFY_SHIELD_DOWN,
+        NOTIFY_CONTAINER_STARTED,
+        NOTIFY_CONTAINER_EXITED,
+    }
+)
+"""Every category the subscriber recognises — the default opt-in set."""
 
 # ── Notification urgency buckets ──────────────────────────────────────
 #
@@ -185,6 +225,19 @@ class EventSubscriber:
             (defaulting to [`default_clearance_socket_path`][terok_clearance.default_clearance_socket_path]).
         socket_path: Clearance-socket override when *client* isn't
             supplied (tests).
+        enabled_categories: Subset of [`ALL_NOTIFY_CATEGORIES`][terok_clearance.client.subscriber.ALL_NOTIFY_CATEGORIES]
+            whose popups should reach the notifier.  ``None`` (the
+            default) enables every category and matches the historical
+            "render everything" behaviour — appropriate for the in-TUI
+            subscriber that builds its own UI on top of the full event
+            stream.  The desktop notifier daemon narrows this to the
+            interactive subset ``{blocked, verdict}`` so passive
+            shield/container popups don't overrun the operator's
+            tray.  Lifecycle hook dispatch
+            (``_dispatch_lifecycle``) and pending-state cleanup remain
+            unconditional — the gate fires only on the ``notify()``
+            call itself, so an embedded consumer's lifecycle callbacks
+            keep firing regardless of which categories are silenced.
     """
 
     def __init__(
@@ -193,10 +246,16 @@ class EventSubscriber:
         client: ClearanceClient | None = None,
         *,
         socket_path: Path | None = None,
+        enabled_categories: AbstractSet[str] | None = None,
     ) -> None:
         """Initialise the subscriber with a notifier and transport."""
         self._notifier = notifier
         self._client = client or ClearanceClient(socket_path=socket_path)
+        self._enabled_categories: frozenset[str] = (
+            ALL_NOTIFY_CATEGORIES
+            if enabled_categories is None
+            else frozenset(enabled_categories) & ALL_NOTIFY_CATEGORIES
+        )
         # request_id → pending block + its notification.
         self._pending: dict[str, _PendingBlock] = {}
         # container → notification_id of the active ShieldDown popup, so
@@ -251,28 +310,51 @@ class EventSubscriber:
         freely without re-running the boundary check.
         """
         dossier = event.dossier
+        enabled = self._enabled_categories
         if event.type == "connection_blocked":
-            await self._handle_connection_blocked(event, dossier)
+            if NOTIFY_BLOCKED in enabled:
+                await self._handle_connection_blocked(event, dossier)
         elif event.type == "verdict_applied":
-            await self._handle_verdict_applied(event)
+            if NOTIFY_VERDICT in enabled:
+                await self._handle_verdict_applied(event)
+            else:
+                # Drop the pending entry even when no resolution popup is
+                # rendered, so the in-memory dict doesn't grow unbounded.
+                self._pending.pop(event.request_id, None)
         elif event.type == "container_started":
             _log.info("Container started: %s", event.container)
-            self._dispatch(self._notify_container_started(event.container, dossier))
+            if NOTIFY_CONTAINER_STARTED in enabled:
+                self._dispatch(self._notify_container_started(event.container, dossier))
             self._dispatch_lifecycle("on_container_started", event.container)
         elif event.type == "container_exited":
             _log.info("Container exited: %s (reason=%s)", event.container, event.reason)
+            # Pending purge is a state-cleanup concern, not a popup —
+            # always run it regardless of category gating.
             self._dispatch(self._handle_container_exited(event.container))
-            self._dispatch(self._notify_container_exited(event.container, event.reason, dossier))
+            if NOTIFY_CONTAINER_EXITED in enabled:
+                self._dispatch(
+                    self._notify_container_exited(event.container, event.reason, dossier)
+                )
             self._dispatch_lifecycle("on_container_exited", event.container, event.reason)
         elif event.type == "shield_up":
             _log.info("Shield up: %s", event.container)
-            self._dispatch(self._notify_shield_up(event.container, dossier))
+            # Closing the stale ShieldDown popup is a security cleanup,
+            # not a confirmation — leaving "Shield DOWN" on screen after
+            # shield is back is the hazard called out in
+            # ``_notify_shield_up``'s docstring.  Always run it; gate
+            # only the "Shield up: …" confirmation popup.
+            self._dispatch(self._close_stale_shield_down(event.container))
+            if NOTIFY_SHIELD_UP in enabled:
+                self._dispatch(self._notify_shield_up(event.container, dossier))
             self._dispatch_lifecycle("on_shield_up", event.container)
         elif event.type in {"shield_down", "shield_down_all"}:
             allow_all = event.type == "shield_down_all"
             _log.info("Shield down: %s (allow_all=%s)", event.container, allow_all)
             self._dispatch(self._handle_shield_down(event.container))
-            self._dispatch(self._notify_shield_down(event.container, dossier, allow_all=allow_all))
+            if NOTIFY_SHIELD_DOWN in enabled:
+                self._dispatch(
+                    self._notify_shield_down(event.container, dossier, allow_all=allow_all)
+                )
             self._dispatch_lifecycle(
                 "on_shield_down_all" if allow_all else "on_shield_down",
                 event.container,
@@ -441,13 +523,22 @@ class EventSubscriber:
         )
         self._shield_down_notifs[container] = nid
 
-    async def _notify_shield_up(self, container: str, dossier: Dossier) -> None:
-        """Close the stale ShieldDown popup (if any) and post a brief confirmation."""
+    async def _close_stale_shield_down(self, container: str) -> None:
+        """Close any tracked ShieldDown popup for *container* — security cleanup.
+
+        Runs unconditionally on every ``shield_up`` event, even when the
+        operator has the ``NOTIFY_SHIELD_UP`` confirmation popup
+        disabled: a "Shield DOWN" alert that lingers after shield is
+        back up is a security hazard the user must not see.
+        """
         if (down_nid := self._shield_down_notifs.pop(container, None)) is not None:
             try:
                 await self._notifier.close(down_nid)
             except Exception:
                 _log.exception("Failed to close stale ShieldDown notification %d", down_nid)
+
+    async def _notify_shield_up(self, container: str, dossier: Dossier) -> None:
+        """Post a brief ``Shield up`` confirmation popup."""
         label = _identity_label(dossier, container)
         await self._notifier.notify(
             f"Shield up: {label}",

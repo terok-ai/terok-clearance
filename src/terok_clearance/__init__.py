@@ -41,7 +41,16 @@ Two unrelated wire formats live under this one package as a result:
 """
 
 from terok_clearance.client.client import ClearanceClient
-from terok_clearance.client.subscriber import EventSubscriber
+from terok_clearance.client.subscriber import (
+    ALL_NOTIFY_CATEGORIES,
+    NOTIFY_BLOCKED,
+    NOTIFY_CONTAINER_EXITED,
+    NOTIFY_CONTAINER_STARTED,
+    NOTIFY_SHIELD_DOWN,
+    NOTIFY_SHIELD_UP,
+    NOTIFY_VERDICT,
+    EventSubscriber,
+)
 from terok_clearance.domain.events import ClearanceEvent
 from terok_clearance.hub.server import ClearanceHub, serve
 from terok_clearance.notifications.callback import CallbackNotifier, Notification
@@ -68,6 +77,7 @@ from terok_clearance.wire.interface import CLEARANCE_INTERFACE_NAME, Clearance1I
 from terok_clearance.wire.socket import default_clearance_socket_path
 
 __all__ = [
+    "ALL_NOTIFY_CATEGORIES",
     "CLEARANCE_INTERFACE_NAME",
     "CallbackNotifier",
     "Clearance1Interface",
@@ -77,6 +87,12 @@ __all__ = [
     "DbusNotifier",
     "EventSubscriber",
     "InvalidAction",
+    "NOTIFY_BLOCKED",
+    "NOTIFY_CONTAINER_EXITED",
+    "NOTIFY_CONTAINER_STARTED",
+    "NOTIFY_SHIELD_DOWN",
+    "NOTIFY_SHIELD_UP",
+    "NOTIFY_VERDICT",
     "Notification",
     "Notifier",
     "NullNotifier",
