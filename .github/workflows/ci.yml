@@ -100,3 +100,27 @@ jobs:
 
       - name: Run SAST scan
         run: bandit -r src/terok_clearance/ -ll
+
+  # Static type checking via mypy.  Installs the package + main deps so
+  # mypy can read real signatures for imported third-party types
+  # (`dbus-fast`, `asyncvarlink`, …); the test group is skipped because
+  # ``python-dbusmock`` transitively pulls ``dbus-python`` which needs a
+  # C toolchain — unrelated to type checking ``src/``.
+  typecheck:
+    if: github.repository == 'terok-ai/terok-clearance'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install project + tools
+        run: |
+          pip install -e .
+          pip install -r .github/requirements-ci.txt
+
+      - name: Run mypy
+        run: mypy src/terok_clearance/
