@@ -8,19 +8,27 @@ version = "0.6.10"
 description = "Shield clearance and desktop notifications for terok"
 readme = "README.md"
 license = "Apache-2.0"
-authors = ["terok maintainers"]
+authors = ["Jiri Vyskocil <jiri@vyskocil.com>"]
 keywords = ["dbus", "notifications", "desktop", "freedesktop"]
 classifiers = [
-  "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: Apache Software License",
-  "Environment :: Console",
-  "Operating System :: POSIX :: Linux",
-  "Topic :: Desktop Environment",
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python",
+    "Topic :: Desktop Environment",
+    "Typing :: Typed",
 ]
 
 packages = [
   { include = "terok_clearance", from = "src" },
 ]
+maintainers = ["Jiri Vyskocil <jiri@vyskocil.com>"]
+homepage = "https://terok.ai/"
+repository = "https://github.com/terok-ai/terok-clearance"
+documentation = "https://terok-ai.github.io/terok-clearance/"
 
 [tool.poetry.dependencies]
 python = ">=3.12,<4.0"
@@ -55,6 +63,11 @@ mkdocs-terok = {url = "https://github.com/terok-ai/mkdocs-terok/releases/downloa
 [tool.poetry.scripts]
 terok-clearance-hub = "terok_clearance.cli.main:main"
 terok-clearance-notifier = "terok_clearance.notifier.app:main"
+
+[tool.poetry.urls]
+Issues = "https://github.com/terok-ai/terok-clearance/issues"
+Changelog = "https://github.com/terok-ai/terok-clearance/releases"
+Security = "https://github.com/terok-ai/terok-clearance/security/policy"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
