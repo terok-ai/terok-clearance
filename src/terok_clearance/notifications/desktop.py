@@ -13,6 +13,7 @@ from typing import Any
 
 from dbus_fast import Message, MessageType
 from dbus_fast.aio import MessageBus
+from dbus_fast.introspection import Node as _IntrospectionNode
 
 _log = logging.getLogger(__name__)
 
@@ -172,8 +173,12 @@ class DbusNotifier:
         if self._conn is not None:
             return
         async with self._connect_lock:
+            # Double-checked locking: another task may have set ``_conn``
+            # between the first check and acquiring the lock.  Mypy can't
+            # see the concurrent write so it treats the second check as
+            # unreachable.
             if self._conn is not None:
-                return
+                return  # type: ignore[unreachable]
             bus = await MessageBus().connect()
             try:
                 # Build the proxy from a hand-rolled XML — the
@@ -183,7 +188,9 @@ class DbusNotifier:
                 # round-trip and without depending on what the session
                 # daemon's Introspect happens to return.
                 proxy = bus.get_proxy_object(
-                    BUS_NAME, OBJECT_PATH, _NOTIFICATIONS_INTROSPECTION_XML
+                    BUS_NAME,
+                    OBJECT_PATH,
+                    _IntrospectionNode.parse(_NOTIFICATIONS_INTROSPECTION_XML),
                 )
                 iface = proxy.get_interface(INTERFACE_NAME)
                 # Subscribe via a raw bus message handler instead of

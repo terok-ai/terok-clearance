@@ -135,14 +135,19 @@ class _TerminalClearance:
 
     async def _read_stdin(self, loop: asyncio.AbstractEventLoop) -> None:
         """Read lines from stdin in a thread executor."""
-        while not self._stop.is_set():
+        # ``_stop`` is created in ``run()`` before this coroutine is scheduled,
+        # so it's always set by the time we get here — narrow it for mypy.
+        if self._stop is None:
+            raise RuntimeError("_read_stdin called before run() initialised _stop")
+        stop = self._stop
+        while not stop.is_set():
             try:
                 line = await loop.run_in_executor(None, sys.stdin.readline)
             except (EOFError, OSError):
-                self._stop.set()
+                stop.set()
                 break
             if not line:  # EOF
-                self._stop.set()
+                stop.set()
                 break
             self._handle_input(line)
 

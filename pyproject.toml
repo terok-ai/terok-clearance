@@ -45,6 +45,7 @@ complexipy = ">=5.0"
 vulture = ">=2.12"
 reuse = "^6.2.0"
 tach = "^0.34.1"
+mypy = ">=1.13,<2.0"
 
 [tool.poetry.group.test.dependencies]
 pytest = ">=9.0.3"
@@ -117,6 +118,22 @@ combine-as-imports = true
 quote-style = "double"
 indent-style = "space"
 docstring-code-format = true
+
+# Static type checking — see `make typecheck`.
+[tool.mypy]
+python_version = "3.12"
+files = ["src/terok_clearance"]
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unreachable = true
+no_implicit_optional = true
+strict_equality = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+pretty = false
+show_error_codes = true
 
 [tool.poetry-dynamic-versioning]
 enable = true

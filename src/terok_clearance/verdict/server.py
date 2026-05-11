@@ -23,7 +23,7 @@ import contextlib
 import logging
 from pathlib import Path
 
-from asyncvarlink import VarlinkInterfaceRegistry, create_unix_server
+from asyncvarlink import VarlinkInterfaceRegistry, VarlinkUnixServer, create_unix_server
 from asyncvarlink.serviceinterface import VarlinkServiceInterface
 
 from terok_clearance.verdict.interface import Verdict1Interface
@@ -52,7 +52,7 @@ class VerdictServer:
         """Configure the socket + shield executable path."""
         self._socket_path = socket_path or default_verdict_socket_path()
         self._shield_binary = shield_binary or find_shield_binary()
-        self._server: object | None = None
+        self._server: VarlinkUnixServer | None = None
 
     async def start(self) -> None:
         """Bind the varlink server and start accepting hub verdict calls."""

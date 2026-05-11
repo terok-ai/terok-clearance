@@ -16,6 +16,7 @@ their caller-trust story is easiest to audit.
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from typing import TypedDict
 
 from asyncvarlink import VarlinkInterface, varlinkmethod
@@ -41,7 +42,9 @@ class Verdict1Interface(VarlinkInterface, name=VERDICT_INTERFACE_NAME):
     awaits on it; the helper's implementation is async anyway.
     """
 
-    def __init__(self, apply_verdict):
+    def __init__(
+        self, apply_verdict: Callable[[str, str, str], Awaitable[tuple[bool, str]]]
+    ) -> None:
         """Bind the verdict-dispatch callable."""
         self._apply_verdict = apply_verdict
 

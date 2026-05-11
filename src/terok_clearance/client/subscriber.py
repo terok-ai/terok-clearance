@@ -19,7 +19,7 @@ import logging
 from collections.abc import Coroutine, Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from dbus_fast import Variant
 
@@ -168,8 +168,23 @@ def _blocked_body(
     return "\n".join(lines)
 
 
-def _notify_kwargs(dossier: Dossier) -> dict[str, str]:
-    """Map the dossier dict to the notifier's typed kwargs.
+class _NotifyIdentityKwargs(TypedDict):
+    """Identity kwargs for :meth:`Notifier.notify`.
+
+    A ``TypedDict`` (vs a plain ``dict[str, str]``) so ``**_notify_kwargs(...)``
+    type-checks cleanly against ``Notifier.notify``'s typed keyword arguments
+    instead of being treated as a wildcard that could collide with the
+    ``actions``/``timeout_ms`` slots.
+    """
+
+    container_name: str
+    project: str
+    task_id: str
+    task_name: str
+
+
+def _notify_kwargs(dossier: Dossier) -> _NotifyIdentityKwargs:
+    """Map the dossier dict to the notifier's typed identity kwargs.
 
     The notifier API still wants per-key arguments (``container_name``,
     ``project``, ``task_id``, ``task_name``) so action-router code paths

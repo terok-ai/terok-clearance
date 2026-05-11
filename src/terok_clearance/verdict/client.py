@@ -22,7 +22,12 @@ import contextlib
 import logging
 from pathlib import Path
 
-from asyncvarlink import VarlinkClientProtocol, connect_unix_varlink
+from asyncvarlink import (
+    VarlinkClientProtocol,
+    VarlinkInterfaceProxy,
+    VarlinkTransport,
+    connect_unix_varlink,
+)
 
 from terok_clearance.verdict.interface import Verdict1Interface
 from terok_clearance.verdict.socket import default_verdict_socket_path
@@ -43,8 +48,8 @@ class VerdictClient:
     def __init__(self, *, socket_path: Path | None = None) -> None:
         """Remember the socket; default to [`default_verdict_socket_path`][terok_clearance.verdict.client.default_verdict_socket_path]."""
         self._socket_path = socket_path or default_verdict_socket_path()
-        self._transport: object | None = None
-        self._proxy: object | None = None
+        self._transport: VarlinkTransport | None = None
+        self._proxy: VarlinkInterfaceProxy | None = None
         self._connect_lock = asyncio.Lock()
 
     async def apply(self, container: str, dest: str, action: str) -> tuple[bool, str]:
@@ -58,6 +63,10 @@ class VerdictClient:
         for attempt in (1, 2):
             try:
                 await self._ensure_connected()
+                # ``_ensure_connected`` guarantees ``_proxy`` is bound on
+                # return; the explicit check is for mypy.
+                if self._proxy is None:
+                    return False, "verdict helper unreachable: proxy not bound"
                 reply = await self._proxy.Apply(
                     container=container,
                     dest=dest,
@@ -82,8 +91,10 @@ class VerdictClient:
         if self._proxy is not None:
             return
         async with self._connect_lock:
+            # Double-checked locking: another task may have raced and set
+            # ``_proxy`` between the first check and the lock acquisition.
             if self._proxy is not None:
-                return
+                return  # type: ignore[unreachable]
             transport, proto = await connect_unix_varlink(
                 VarlinkClientProtocol, str(self._socket_path)
             )

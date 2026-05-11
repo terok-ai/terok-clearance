@@ -1,4 +1,4 @@
-.PHONY: all lint format test test-unit test-integration test-matrix ruff-report bandit-report sonar-inputs tach security docstrings complexity deadcode reuse check install install-dev docs docs-build clean spdx
+.PHONY: all lint format test test-unit test-integration test-matrix ruff-report bandit-report sonar-inputs tach security docstrings complexity deadcode reuse typecheck check install install-dev docs docs-build clean spdx
 
 REPORTS_DIR ?= reports
 COVERAGE_XML ?= $(REPORTS_DIR)/coverage.xml
@@ -73,6 +73,10 @@ complexity:
 deadcode:
 	poetry run vulture src/terok_clearance/ vulture_whitelist.py --min-confidence 80
 
+# Static type check with mypy.
+typecheck:
+	poetry run mypy src/terok_clearance/
+
 # Check REUSE (SPDX license/copyright) compliance
 reuse:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
@@ -88,7 +92,7 @@ endif
 	poetry run reuse annotate --template compact --copyright "$(NAME)" --license Apache-2.0 $(FILES)
 
 # Run all checks (equivalent to CI)
-check: lint test-unit tach security docstrings deadcode reuse
+check: lint test-unit tach typecheck security docstrings deadcode reuse
 
 # Install runtime dependencies only
 install:

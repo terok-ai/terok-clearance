@@ -23,7 +23,12 @@ import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
-from asyncvarlink import VarlinkClientProtocol, connect_unix_varlink
+from asyncvarlink import (
+    VarlinkClientProtocol,
+    VarlinkInterfaceProxy,
+    VarlinkTransport,
+    connect_unix_varlink,
+)
 from asyncvarlink.error import VarlinkErrorReply
 
 from terok_clearance.domain.events import ClearanceEvent
@@ -70,10 +75,10 @@ class ClearanceClient:
         """Remember the target socket; defaults to [`default_clearance_socket_path`][terok_clearance.client.client.default_clearance_socket_path]."""
         self._socket_path = socket_path or default_clearance_socket_path()
         self._on_event: EventCallback | None = None
-        self._sub_transport: object | None = None
-        self._rpc_transport: object | None = None
-        self._sub_proxy: object | None = None
-        self._rpc_proxy: object | None = None
+        self._sub_transport: VarlinkTransport | None = None
+        self._rpc_transport: VarlinkTransport | None = None
+        self._sub_proxy: VarlinkInterfaceProxy | None = None
+        self._rpc_proxy: VarlinkInterfaceProxy | None = None
         self._stream_task: asyncio.Task[None] | None = None
         self._stopping = False
         # Set by [`poke_reconnect`][terok_clearance.client.client.ClearanceClient.poke_reconnect]; awaited inside the back-off
@@ -203,8 +208,10 @@ class ClearanceClient:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # noqa: BLE001 — any drop falls through to reconnect
+                # ``_stopping`` is flipped by ``stop()`` from another task, so
+                # the check below isn't unreachable as mypy thinks.
                 if self._stopping:
-                    return
+                    return  # type: ignore[unreachable]
                 if isinstance(exc, self._DISCONNECT_ERRORS):
                     _log.info(
                         "clearance event stream ended (%s); reconnecting in %.1fs", exc, backoff
@@ -212,7 +219,7 @@ class ClearanceClient:
                 else:
                     _log.exception("clearance event stream died; reconnecting in %.1fs", backoff)
             if self._stopping:
-                return
+                return  # type: ignore[unreachable]
             self._close_transports()
             try:
                 await asyncio.wait_for(self._reconnect_poke.wait(), timeout=backoff)

@@ -26,7 +26,7 @@ import logging
 from collections.abc import AsyncIterator
 from pathlib import Path
 
-from asyncvarlink import VarlinkInterfaceRegistry, create_unix_server
+from asyncvarlink import VarlinkInterfaceRegistry, VarlinkUnixServer, create_unix_server
 from asyncvarlink.serviceinterface import VarlinkServiceInterface
 
 from terok_clearance.domain.events import ClearanceEvent, Dossier
@@ -109,7 +109,7 @@ class ClearanceHub:
         self._live_verdicts: dict[str, tuple[str, str]] = {}
 
         self._ingester: EventIngester | None = None
-        self._varlink_server: object | None = None  # asyncvarlink's UnixServer
+        self._varlink_server: VarlinkUnixServer | None = None
 
     # ── lifecycle ──────────────────────────────────────────────────────
 
