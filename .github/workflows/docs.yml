@@ -41,6 +41,11 @@ jobs:
           path: .venv
           key: venv-${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-docs-${{ hashFiles('**/pyproject.toml', '**/poetry.lock') }}
 
+      - name: Install system dependencies (dbus-python build)
+        # python-dbusmock (test group) transitively pulls dbus-python, which
+        # needs these to compile. Matches the equivalent step in analysis.yml.
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libglib2.0-dev pkg-config meson
+
       - name: Install dependencies
         run: poetry install --with dev,docs,test --no-interaction
 
