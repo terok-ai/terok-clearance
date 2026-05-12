@@ -2,6 +2,7 @@
 
 REPORTS_DIR ?= reports
 COVERAGE_XML ?= $(REPORTS_DIR)/coverage.xml
+COVERAGE_JSON ?= $(REPORTS_DIR)/coverage.json
 UNIT_JUNIT_XML ?= $(REPORTS_DIR)/unit.junit.xml
 INTEGRATION_JUNIT_XML ?= $(REPORTS_DIR)/integration.junit.xml
 RUFF_REPORT ?= $(REPORTS_DIR)/ruff-report.json
@@ -26,7 +27,7 @@ format:
 # Run unit tests with coverage (excludes integration tests)
 test-unit:
 	mkdir -p $(REPORTS_DIR)
-	poetry run pytest tests/ --ignore=tests/integration --cov=terok_clearance --cov-report=term-missing --cov-report=xml:$(COVERAGE_XML) --junitxml=$(UNIT_JUNIT_XML) -o junit_family=legacy
+	poetry run pytest tests/ --ignore=tests/integration --cov=terok_clearance --cov-report=term-missing --cov-report=xml:$(COVERAGE_XML) --cov-report=json:$(COVERAGE_JSON) --junitxml=$(UNIT_JUNIT_XML) -o junit_family=legacy
 	@echo "NOTE: Target 95%+ test coverage."
 
 # Run integration tests (requires D-Bus session bus + dunst)

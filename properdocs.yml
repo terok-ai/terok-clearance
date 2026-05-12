@@ -54,6 +54,7 @@ plugins:
   - terok:
       ci_map: true
       code_metrics: true
+      code_metrics_coverage_json_path: reports/coverage.json
       code_metrics_codecov_repo: terok-ai/terok-clearance
       ref_pages: true
   - literate-nav:
