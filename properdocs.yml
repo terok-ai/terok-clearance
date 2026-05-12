@@ -53,8 +53,8 @@ plugins:
             merge_init_into_class: true
   - terok:
       ci_map: true
-      quality_report: true
-      quality_report_codecov_repo: terok-ai/terok-clearance
+      code_metrics: true
+      code_metrics_codecov_repo: terok-ai/terok-clearance
       ref_pages: true
   - literate-nav:
       nav_file: SUMMARY.md
@@ -84,7 +84,7 @@ nav:
   - Home: index.md
   - Developer Guide:
     - Contributing: developer.md
-    - Code Metrics: quality-report.md
+    - Code Metrics: code-metrics.md
     - CI Workflow Map: ci-map.md
   - API Reference: reference/
 
