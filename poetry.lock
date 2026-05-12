@@ -1187,13 +1187,13 @@ properdocs = ">=1.6.5"
 
 [[package]]
 name = "mkdocs-terok"
-version = "0.5.7a2"
+version = "0.5.7a3"
 description = "Shared ProperDocs documentation generators for terok projects"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["docs"]
 files = [
-    {file = "mkdocs_terok-0.5.7a2-py3-none-any.whl", hash = "sha256:e28f468da2c0f4b5cc8b586bcb24afb3e6759626bcabf124f4e4abcac6648a71"},
+    {file = "mkdocs_terok-0.5.7a3-py3-none-any.whl", hash = "sha256:ed90289ebac816145018d503d36866d42b713d987dddbb6fb80e31c68040e270"},
 ]
 
 [package.dependencies]
@@ -1202,7 +1202,7 @@ PyYAML = ">=6.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/terok-ai/mkdocs-terok/releases/download/v0.5.7a2/mkdocs_terok-0.5.7a2-py3-none-any.whl"
+url = "https://github.com/terok-ai/mkdocs-terok/releases/download/v0.5.7a3/mkdocs_terok-0.5.7a3-py3-none-any.whl"
 
 [[package]]
 name = "mkdocstrings"
@@ -2233,4 +2233,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "7f28f9f5cd1f09cd328a910057bb932baaa6fb54c4342d6ea9d787a9bf1b49cc"
+content-hash = "550214ebe136e4f1a638708716baba09f56afa33cb0d7e6161bb26c030d22221"
