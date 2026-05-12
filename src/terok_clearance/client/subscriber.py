@@ -169,7 +169,7 @@ def _blocked_body(
 
 
 class _NotifyIdentityKwargs(TypedDict):
-    """Identity kwargs for :meth:`Notifier.notify`.
+    """Identity kwargs for [`notify`][terok_clearance.notifications.protocol.Notifier.notify].
 
     A ``TypedDict`` (vs a plain ``dict[str, str]``) so ``**_notify_kwargs(...)``
     type-checks cleanly against ``Notifier.notify``'s typed keyword arguments
