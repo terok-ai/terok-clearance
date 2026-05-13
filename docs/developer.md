@@ -8,6 +8,25 @@ cd terok-clearance
 make install-dev
 ```
 
+### System dependencies
+
+Poetry pulls in `dbus-python` (used by `python-dbusmock` in the test
+suite for a private session bus).  It has no wheel and builds from
+source against the system D-Bus and GLib development headers, so
+those need to be installed before `make install-dev` — otherwise the
+build fails with `dbus/dbus.h: No such file or directory`.
+
+```bash
+# Fedora / RHEL
+sudo dnf install dbus-devel glib2-devel python-devel gcc
+
+# Debian / Ubuntu (adjust the python3.X-dev version to match your interpreter)
+sudo apt install libdbus-1-dev libglib2.0-dev python3.12-dev gcc
+```
+
+The test matrix containers install these automatically — see
+``tests/containers/Containerfile.*``.
+
 ## Commands
 
 ```bash
