@@ -40,17 +40,24 @@ fi
 declare -A DISTROS=(
     [debian12]="debian12"
     [ubuntu2404]="ubuntu2404"
+    [ubuntu2604]="ubuntu2604"
     [debian13]="debian13"
     [fedora43]="fedora43"
+    [fedora44]="fedora44"
     [podman]="podman"
 )
 
-# Expected platform info (for reporting)
+# Expected platform info (for reporting).  Unlike the sibling repos
+# (terok-shield, terok-sandbox, terok) clearance does not exercise
+# nested podman, so the meaningful axis here is OS distro / D-Bus stack,
+# not podman version.  Hence platform labels rather than EXPECTED_VERSIONS.
 declare -A EXPECTED_PLATFORMS=(
     [debian12]="Debian 12 Bookworm"
     [ubuntu2404]="Ubuntu 24.04 Noble"
+    [ubuntu2604]="Ubuntu 26.04 Resolute"
     [debian13]="Debian 13 Trixie"
     [fedora43]="Fedora 43"
+    [fedora44]="Fedora 44"
     [podman]="Podman stable (rawhide)"
 )
 
@@ -59,8 +66,10 @@ declare -A EXPECTED_PLATFORMS=(
 declare -A TEST_USERS=(
     [debian12]="testrunner"
     [ubuntu2404]="testrunner"
+    [ubuntu2604]="testrunner"
     [debian13]="testrunner"
     [fedora43]="testrunner"
+    [fedora44]="testrunner"
     [podman]="podman"
 )
 
