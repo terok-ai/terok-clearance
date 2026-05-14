@@ -47,20 +47,6 @@ declare -A DISTROS=(
     [podman]="podman"
 )
 
-# Expected platform info (for reporting).  Unlike the sibling repos
-# (terok-shield, terok-sandbox, terok) clearance does not exercise
-# nested podman, so the meaningful axis here is OS distro / D-Bus stack,
-# not podman version.  Hence platform labels rather than EXPECTED_VERSIONS.
-declare -A EXPECTED_PLATFORMS=(
-    [debian12]="Debian 12 Bookworm"
-    [ubuntu2404]="Ubuntu 24.04 Noble"
-    [ubuntu2604]="Ubuntu 26.04 Resolute"
-    [debian13]="Debian 13 Trixie"
-    [fedora43]="Fedora 43"
-    [fedora44]="Fedora 44"
-    [podman]="Podman stable (rawhide)"
-)
-
 # Non-root user baked into each Containerfile.
 # The podman image uses its pre-existing 'podman' user.
 declare -A TEST_USERS=(
@@ -138,7 +124,7 @@ run_tests() {
     local test_user="${TEST_USERS[$name]}"
 
     echo ""
-    echo -e "${C_CYAN}==> Testing ${C_BOLD}$name${C_CYAN} (${EXPECTED_PLATFORMS[$name]})${C_RESET}"
+    echo -e "${C_CYAN}==> Testing ${C_BOLD}$name${C_RESET}"
     echo -e "    ${C_DIM}scope: $test_scope, user: $test_user${C_RESET}"
     echo ""
 
@@ -242,7 +228,7 @@ done
 
 if $LIST_ONLY; then
     for name in "${!DISTROS[@]}"; do
-        echo "$name (${EXPECTED_PLATFORMS[$name]})"
+        echo "$name"
     done | sort
     exit 0
 fi
@@ -283,10 +269,10 @@ done
 echo ""
 echo -e "${C_BOLD}===== Matrix Summary =====${C_RESET}"
 for target in "${PASSED[@]}"; do
-    echo -e "  ${C_GREEN}PASS${C_RESET}: $target ${C_DIM}(${EXPECTED_PLATFORMS[$target]})${C_RESET}"
+    echo -e "  ${C_GREEN}PASS${C_RESET}: $target"
 done
 for target in "${FAILED[@]}"; do
-    echo -e "  ${C_RED}FAIL${C_RESET}: $target ${C_DIM}(${EXPECTED_PLATFORMS[$target]})${C_RESET}"
+    echo -e "  ${C_RED}FAIL${C_RESET}: $target"
 done
 
 if [[ ${#FAILED[@]} -gt 0 ]]; then
