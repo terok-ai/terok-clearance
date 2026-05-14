@@ -5,6 +5,10 @@ also the "Changelog" link in PyPI metadata.
 
 [rel]: https://github.com/terok-ai/terok-clearance/releases
 
+## v0.6.12 — The Tree of Command
+
+**Full Changelog**: https://github.com/terok-ai/terok-clearance/compare/v0.6.11...v0.6.12
+
 ## v0.6.11 — Checkpoint Charlie
 
 * introduce mypy as the static type checker in https://github.com/terok-ai/terok-clearance/pull/97

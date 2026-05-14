@@ -34,17 +34,26 @@ class ArgDef:
 class CommandDef:
     """Definition of a terok-clearance subcommand.
 
+    Structurally compatible with terok-sandbox's ``CommandDef``: same
+    attribute names + ``children`` for nested verb groups, so
+    downstream consumers (terok) can wire the registry through
+    sandbox's ``CommandTree`` without per-package adapters.
+
     Attributes:
         name: Subcommand name (e.g. ``"notify"``).
         help: One-line help string for ``--help``.
         handler: Async callable implementing the command logic.
         args: CLI arguments beyond the subcommand name.
+        children: Sub-verbs.  Empty for every existing clearance verb —
+            present for structural compatibility with the unified
+            CommandDef shape across the terok-ai ecosystem.
     """
 
     name: str
     help: str = ""
     handler: Callable[..., Coroutine[Any, Any, None]] | None = None
     args: tuple[ArgDef, ...] = ()
+    children: tuple["CommandDef", ...] = ()
 
 
 # ── Handler functions ─────────────────────────────────────
