@@ -3,7 +3,7 @@
 
 """CLI entry point for ``terok-clearance`` — desktop notification tools.
 
-Builds the argument parser from the [`COMMANDS`][terok_clearance.cli.registry.COMMANDS] registry so the
+Builds the argument parser from the [`COMMANDS`][terok_clearance.commands.COMMANDS] registry so the
 standalone CLI and the terok integration layer share a single source
 of truth for subcommand definitions.
 """
@@ -12,7 +12,7 @@ import argparse
 import asyncio
 import sys
 
-from terok_clearance.cli.registry import COMMANDS, ArgDef
+from terok_clearance.commands import COMMANDS, ArgDef
 
 
 def _add_arg(parser: argparse.ArgumentParser, arg: ArgDef) -> None:

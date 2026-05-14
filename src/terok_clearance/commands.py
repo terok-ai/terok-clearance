@@ -3,13 +3,14 @@
 
 """Command registry for terok-clearance.
 
-Provides [`CommandDef`][terok_clearance.cli.registry.CommandDef] and [`ArgDef`][terok_clearance.cli.registry.ArgDef] dataclasses describing
-every ``terok-clearance`` subcommand.  The ``COMMANDS`` tuple is the single
+Provides [`CommandDef`][terok_clearance.commands.CommandDef] and
+[`ArgDef`][terok_clearance.commands.ArgDef] dataclasses describing every
+``terok-clearance`` subcommand.  The ``COMMANDS`` tuple is the single
 source of truth consumed by both the standalone CLI and the terok
-integration layer (``terok dbus …``).
+integration layer.
 
 Handler functions are async coroutines accepting ``**kwargs`` that match
-the declared [`ArgDef`][terok_clearance.cli.registry.ArgDef] names.
+the declared [`ArgDef`][terok_clearance.commands.ArgDef] names.
 """
 
 from collections.abc import Callable, Coroutine

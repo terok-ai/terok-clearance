@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from terok_clearance.cli.registry import COMMANDS
 from terok_clearance.cli.terminal_clearance import _TerminalClearance, run_clearance
+from terok_clearance.commands import COMMANDS
 from terok_clearance.notifications.callback import Notification
 
 

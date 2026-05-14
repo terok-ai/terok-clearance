@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from terok_clearance.cli.registry import COMMANDS, CommandDef, _handle_notify, _handle_serve
+from terok_clearance.commands import COMMANDS, CommandDef, _handle_notify, _handle_serve
 
 
 class TestCommandRegistry:
