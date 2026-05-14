@@ -66,7 +66,7 @@ class CallbackNotifier:
             on the per-container row without polling nft state.
         on_shield_down: Called for every ``ShieldDown`` signal — partial
             bypass (loopback-only traffic still allowed).
-        on_shield_down_all: Called for every ``ShieldDownAll`` signal —
+        on_shield_disengaged: Called for every ``ShieldDisengaged`` signal —
             unrestricted bypass.  Split from ``on_shield_down`` so the
             consumer can render the two modes differently.
     """
@@ -79,7 +79,7 @@ class CallbackNotifier:
         on_container_exited: Callable[[str, str], None] | None = None,
         on_shield_up: Callable[[str], None] | None = None,
         on_shield_down: Callable[[str], None] | None = None,
-        on_shield_down_all: Callable[[str], None] | None = None,
+        on_shield_disengaged: Callable[[str], None] | None = None,
     ) -> None:
         """Bind optional notify and lifecycle callbacks."""
         self._on_notify = on_notify
@@ -87,7 +87,7 @@ class CallbackNotifier:
         self._on_container_exited = on_container_exited
         self._on_shield_up = on_shield_up
         self._on_shield_down = on_shield_down
-        self._on_shield_down_all = on_shield_down_all
+        self._on_shield_disengaged = on_shield_disengaged
         self._next_id = 1
         self._callbacks: dict[int, Callable[[str], None]] = {}
 
@@ -177,7 +177,7 @@ class CallbackNotifier:
         if self._on_shield_down:
             self._on_shield_down(container)
 
-    def on_shield_down_all(self, container: str) -> None:
-        """Forward a ``ShieldDownAll`` signal (full bypass) to the consumer hook."""
-        if self._on_shield_down_all:
-            self._on_shield_down_all(container)
+    def on_shield_disengaged(self, container: str) -> None:
+        """Forward a ``ShieldDisengaged`` signal (full bypass) to the consumer hook."""
+        if self._on_shield_disengaged:
+            self._on_shield_disengaged(container)

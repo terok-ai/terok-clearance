@@ -62,7 +62,7 @@ _WIRE_EVENT_TYPES: frozenset[str] = frozenset(
         "container_exited",
         "shield_up",
         "shield_down",
-        "shield_down_all",
+        "shield_disengaged",
     }
 )
 
@@ -228,7 +228,7 @@ class ClearanceHub:
                 event.container,
                 event.domain or event.dest,
             )
-        elif event.type in {"shield_down", "shield_down_all", "container_exited"}:
+        elif event.type in {"shield_down", "shield_disengaged", "container_exited"}:
             stale = [
                 rid
                 for rid, (container, _) in self._live_verdicts.items()

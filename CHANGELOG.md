@@ -5,6 +5,15 @@ also the "Changelog" link in PyPI metadata.
 
 [rel]: https://github.com/terok-ai/terok-clearance/releases
 
+## v0.6.13 — The State of the Shields
+
+## What's Changed
+* feat!: rename ShieldDownAll signal/event/callback to ShieldDisengaged in https://github.com/terok-ai/terok-clearance/pull/119
+* chore: bump virtualenv 21.3.2 → 21.3.3 in lock for py3.14.4 by @sliwowitz in https://github.com/terok-ai/terok-clearance/pull/118
+
+
+**Full Changelog**: https://github.com/terok-ai/terok-clearance/compare/v0.6.12...v0.6.13
+
 ## v0.6.12 — The Tree of Command
 
 **Full Changelog**: https://github.com/terok-ai/terok-clearance/compare/v0.6.11...v0.6.12

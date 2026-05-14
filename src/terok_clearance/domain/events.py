@@ -65,7 +65,7 @@ class ClearanceEvent:
     * ``verdict_applied`` — ``request_id``, ``action``, ``ok``.
     * ``container_started`` — ``dossier``.
     * ``container_exited`` — ``reason``, ``dossier``.
-    * ``shield_up`` / ``shield_down`` / ``shield_down_all`` — ``dossier``.
+    * ``shield_up`` / ``shield_down`` / ``shield_disengaged`` — ``dossier``.
 
     Unknown values are forwarded unchanged so the wire format can grow
     without breaking clients pinned to older schemas.

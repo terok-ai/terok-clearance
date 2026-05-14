@@ -58,7 +58,7 @@ NOTIFY_SHIELD_UP = "shield_up"
 """Category for ``ShieldUp`` confirmation popups."""
 
 NOTIFY_SHIELD_DOWN = "shield_down"
-"""Category for ``ShieldDown`` / ``ShieldDownAll`` security-alert popups."""
+"""Category for ``ShieldDown`` / ``ShieldDisengaged`` security-alert popups."""
 
 NOTIFY_CONTAINER_STARTED = "container_started"
 """Category for ``ContainerStarted`` lifecycle popups."""
@@ -362,8 +362,8 @@ class EventSubscriber:
             if NOTIFY_SHIELD_UP in enabled:
                 self._dispatch(self._notify_shield_up(event.container, dossier))
             self._dispatch_lifecycle("on_shield_up", event.container)
-        elif event.type in {"shield_down", "shield_down_all"}:
-            allow_all = event.type == "shield_down_all"
+        elif event.type in {"shield_down", "shield_disengaged"}:
+            allow_all = event.type == "shield_disengaged"
             _log.info("Shield down: %s (allow_all=%s)", event.container, allow_all)
             self._dispatch(self._handle_shield_down(event.container))
             if NOTIFY_SHIELD_DOWN in enabled:
@@ -371,7 +371,7 @@ class EventSubscriber:
                     self._notify_shield_down(event.container, dossier, allow_all=allow_all)
                 )
             self._dispatch_lifecycle(
-                "on_shield_down_all" if allow_all else "on_shield_down",
+                "on_shield_disengaged" if allow_all else "on_shield_down",
                 event.container,
             )
 
@@ -521,8 +521,8 @@ class EventSubscriber:
         """Post a persistent security-alert notification for a manual shield drop."""
         label = _identity_label(dossier, container)
         if allow_all:
-            title = f"Shield full bypass: {label}"
-            body = "Outbound firewall fully disabled — every destination is reachable."
+            title = f"Shield disengaged: {label}"
+            body = "Outbound firewall disengaged — every destination is reachable."
         else:
             title = f"Shield down: {label}"
             body = "Outbound firewall bypassed — allowlist is not enforced."
