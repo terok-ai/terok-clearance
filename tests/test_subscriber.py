@@ -217,7 +217,7 @@ class TestShieldState:
         ("member", "expected_title", "body_hint"),
         [
             ("shield_down", "Shield down: ", "bypassed"),
-            ("shield_down_all", "Shield full bypass: ", "fully disabled"),
+            ("shield_disengaged", "Shield disengaged: ", "disengaged"),
         ],
     )
     @pytest.mark.asyncio
