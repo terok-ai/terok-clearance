@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from terok_clearance.cli.main import _build_parser, main
-from terok_clearance.cli.registry import COMMANDS, CommandDef
+from terok_clearance.commands import COMMANDS, CommandDef
 
 
 class TestNotifyParser:

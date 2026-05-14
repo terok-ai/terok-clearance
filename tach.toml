@@ -42,6 +42,7 @@ name = "domain"
 path = "terok_clearance"
 layer = "interface"
 depends_on = [
+    "terok_clearance.commands",
 ]
 
 
@@ -209,10 +210,10 @@ depends_on = [
 [[modules]]
 path = "terok_clearance.cli.main"
 layer = "interface"
-depends_on = ["terok_clearance.cli.registry"]
+depends_on = ["terok_clearance.commands"]
 
 [[modules]]
-path = "terok_clearance.cli.registry"
+path = "terok_clearance.commands"
 layer = "interface"
 depends_on = ["terok_clearance.cli.terminal_clearance"]
 

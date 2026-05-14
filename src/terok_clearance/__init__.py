@@ -51,6 +51,7 @@ from terok_clearance.client.subscriber import (
     NOTIFY_VERDICT,
     EventSubscriber,
 )
+from terok_clearance.commands import COMMANDS, ArgDef, CommandDef
 from terok_clearance.domain.events import ClearanceEvent
 from terok_clearance.hub.server import ClearanceHub, serve
 from terok_clearance.notifications.callback import CallbackNotifier, Notification
@@ -59,6 +60,8 @@ from terok_clearance.notifications.factory import create_notifier
 from terok_clearance.notifications.null import NullNotifier
 from terok_clearance.notifications.protocol import Notifier
 from terok_clearance.runtime.installer import (
+    HUB_UNIT_NAME,
+    NOTIFIER_UNIT_NAME,
     check_units_outdated,
     install_notifier_service,
     read_installed_notifier_unit_version,
@@ -78,15 +81,20 @@ from terok_clearance.wire.socket import default_clearance_socket_path
 
 __all__ = [
     "ALL_NOTIFY_CATEGORIES",
+    "ArgDef",
     "CLEARANCE_INTERFACE_NAME",
+    "COMMANDS",
     "CallbackNotifier",
     "Clearance1Interface",
     "ClearanceClient",
     "ClearanceEvent",
     "ClearanceHub",
+    "CommandDef",
     "DbusNotifier",
     "EventSubscriber",
+    "HUB_UNIT_NAME",
     "InvalidAction",
+    "NOTIFIER_UNIT_NAME",
     "NOTIFY_BLOCKED",
     "NOTIFY_CONTAINER_EXITED",
     "NOTIFY_CONTAINER_STARTED",
