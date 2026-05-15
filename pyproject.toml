@@ -35,7 +35,6 @@ terok-clearance-hub = "terok_clearance.cli.main:main"
 terok-clearance-notifier = "terok_clearance.notifier.app:main"
 
 [tool.poetry]
-version = "0.6.14a2"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -50,6 +49,7 @@ classifiers = [
 packages = [
   { include = "terok_clearance", from = "src" },
 ]
+version = "0.6.14a2"
 
 [tool.poetry.group.dev.dependencies]
 ruff = ">=0.15.10"
