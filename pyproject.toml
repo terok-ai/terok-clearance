@@ -2,20 +2,45 @@
 requires = ["poetry-core>=1.9.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
 build-backend = "poetry_dynamic_versioning.backend"
 
-[tool.poetry]
+[project]
 name = "terok-clearance"
-version = "0.6.14a1"
 description = "Shield clearance and desktop notifications for terok"
 readme = "README.md"
 license = "Apache-2.0"
-authors = ["Jiri Vyskocil <jiri@vyskocil.com>"]
+authors = [
+    {name = "Jiri Vyskocil", email = "jiri@vyskocil.com"},
+]
+maintainers = [
+    {name = "Jiri Vyskocil", email = "jiri@vyskocil.com"},
+]
 keywords = ["dbus", "notifications", "desktop", "freedesktop"]
+requires-python = ">=3.12,<4.0"
+dynamic = ["version", "classifiers"]
+dependencies = [
+    "dbus-fast>=2.0,<5.0",
+    "asyncvarlink>=0.3.1,<0.4.0",
+    "pyyaml>=6.0,<7.0.0",
+]
+
+[project.urls]
+Homepage = "https://terok.ai/"
+Repository = "https://github.com/terok-ai/terok-clearance"
+Documentation = "https://terok-ai.github.io/terok-clearance/"
+Issues = "https://github.com/terok-ai/terok-clearance/issues"
+Changelog = "https://github.com/terok-ai/terok-clearance/blob/master/CHANGELOG.md"
+Security = "https://github.com/terok-ai/terok-clearance/security/policy"
+
+[project.scripts]
+terok-clearance-hub = "terok_clearance.cli.main:main"
+terok-clearance-notifier = "terok_clearance.notifier.app:main"
+
+[tool.poetry]
+version = "0.6.14a1"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: Apache Software License",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python",
     "Topic :: Desktop Environment",
@@ -25,16 +50,6 @@ classifiers = [
 packages = [
   { include = "terok_clearance", from = "src" },
 ]
-maintainers = ["Jiri Vyskocil <jiri@vyskocil.com>"]
-homepage = "https://terok.ai/"
-repository = "https://github.com/terok-ai/terok-clearance"
-documentation = "https://terok-ai.github.io/terok-clearance/"
-
-[tool.poetry.dependencies]
-python = ">=3.12,<4.0"
-dbus-fast = ">=2.0,<5.0"
-asyncvarlink = "^0.3.1"
-pyyaml = "^6.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = ">=0.15.10"
@@ -60,15 +75,6 @@ mkdocstrings = {extras = ["python"], version = ">=0.24"}
 mkdocs-literate-nav = ">=0.6"
 mkdocs-section-index = ">=0.3"
 mkdocs-terok = "^0.6"
-
-[tool.poetry.scripts]
-terok-clearance-hub = "terok_clearance.cli.main:main"
-terok-clearance-notifier = "terok_clearance.notifier.app:main"
-
-[tool.poetry.urls]
-Issues = "https://github.com/terok-ai/terok-clearance/issues"
-Changelog = "https://github.com/terok-ai/terok-clearance/releases"
-Security = "https://github.com/terok-ai/terok-clearance/security/policy"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -132,7 +138,7 @@ no_implicit_optional = true
 strict_equality = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
-pretty = false
+pretty = true
 show_error_codes = true
 
 [tool.poetry-dynamic-versioning]

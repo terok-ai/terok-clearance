@@ -124,3 +124,17 @@ jobs:
 
       - name: Run mypy
         run: mypy src/terok_clearance/
+
+  readme-check:
+    if: github.repository == 'terok-ai/terok-clearance'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Verify README renders for PyPI
+        run: |
+          pip install 'readme_renderer[md]'
+          python -m readme_renderer README.md --format md
