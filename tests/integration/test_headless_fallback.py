@@ -4,8 +4,10 @@
 """Story: no bus, no problem.
 
 When no D-Bus session bus is available the library must degrade
-gracefully — ``create_notifier()`` returns a ``NullNotifier`` and
-the CLI prints ``0`` without crashing.
+gracefully — ``create_notifier()`` returns a ``NullNotifier`` and the
+CLI prints ``0`` without crashing.  The log-silence side of the same
+contract lives in ``tests/test_factory_silence.py`` where it can run
+without the dbusmock integration fixtures.
 """
 
 import subprocess
@@ -44,3 +46,6 @@ class TestHeadlessFallback:
         )
         assert result.returncode == 0
         assert result.stdout.strip() == "0"
+        # stderr is the regression channel: a noisy dbus-fast traceback
+        # here is exactly the operational noise the fallback suppresses.
+        assert result.stderr == "", f"Headless CLI leaked to stderr: {result.stderr!r}"
