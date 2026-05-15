@@ -27,7 +27,7 @@ Homepage = "https://terok.ai/"
 Repository = "https://github.com/terok-ai/terok-clearance"
 Documentation = "https://terok-ai.github.io/terok-clearance/"
 Issues = "https://github.com/terok-ai/terok-clearance/issues"
-Changelog = "https://github.com/terok-ai/terok-clearance/releases"
+Changelog = "https://github.com/terok-ai/terok-clearance/blob/master/CHANGELOG.md"
 Security = "https://github.com/terok-ai/terok-clearance/security/policy"
 
 [project.scripts]
