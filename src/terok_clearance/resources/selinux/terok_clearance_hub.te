@@ -1,0 +1,278 @@
+module terok_clearance_hub 1.5;
+
+# Optional confined domain for the terok-clearance hub daemon.
+#
+# The hub owns the Clearance1 varlink server socket, the reader
+# ingester, subscriber fan-out, and the ``request_id → (container,
+# dest)`` authz binding.  It runs as a systemd user service with
+# AF_UNIX-only network reach, no IP families, and the heavy systemd
+# hardening stack already baked into the unit template
+# (``ProtectSystem=full``, ``IPAddressDeny=any``,
+# ``MemoryDenyWriteExecute=yes``, …).
+#
+# This module *adds* SELinux label-based access control on top of the
+# existing kernel-level systemd directives.  The two layers stack —
+# the systemd directives constrain capabilities/syscalls/FS reach,
+# this domain adds type-enforced object-level guards.
+#
+# No socket types declared here: clearance is host-side only and does
+# not accept connections from rootless containers.  Only the process
+# domain matters.
+#
+# Domain entry is via the ``SELinuxContext=`` directive that
+# ``terok hardening install`` drops into a
+# ``terok-clearance-hub.service.d/hardening-mac.conf`` override.
+# Four pieces of transition policy below are needed to make the
+# directive actually fire on a Fedora user-systemd-service with
+# ``NoNewPrivileges=yes`` set — see the matching header in
+# terok-sandbox's ``terok_gate.te`` for the full anatomy.  No
+# file-context (``.fc``) entries shipped — the venv-installed binary
+# moves on every ``pipx upgrade``.
+#
+# Soak posture: permissive at install time
+# (``semanage permissive -a terok_clearance_hub_t``); flipped to
+# enforcing in a follow-up commit once the AVC trail is quiet.
+
+require {
+    type unconfined_t;
+    type container_runtime_t;
+    type syslogd_t;
+    type kernel_t;
+    type init_t;
+    type bin_t;
+    type user_home_t;
+    # Path-walk types — see matching block in terok-sandbox's
+    # terok_vault.te for the rationale.  Hub state (varlink socket,
+    # any persisted authz binding) lives under ``$XDG_RUNTIME_DIR``
+    # (covered by user_tmp_t) or ``~/.local/share/terok-clearance/``.
+    type var_t;
+    type home_root_t;
+    type user_home_dir_t;
+    type gconf_home_t;
+    type data_home_t;
+    type user_tmp_t;
+    # Python-runtime read targets — interpreter, libs, locale, ld.so
+    # cache, /proc, sysctl knobs, TLS certs.  Surfaced wholesale by
+    # the first soak iteration; CPython startup hits every one of
+    # these before main() runs.
+    type lib_t;
+    type ld_so_t;
+    type ld_so_cache_t;
+    type etc_t;
+    type usr_t;
+    type root_t;
+    type proc_t;
+    type sysctl_t;
+    type sysctl_vm_t;
+    type sysctl_vm_overcommit_t;
+    type sysctl_crypto_t;
+    type locale_t;
+    type cert_t;
+    type null_device_t;
+    type var_run_t;
+    role system_r;
+    role unconfined_r;
+    class unix_stream_socket {
+        create bind listen accept connect
+        read write getattr getopt setopt shutdown ioctl
+        connectto
+    };
+    class process {
+        transition sigchld signull signal siginh rlimitinh noatsecure
+        sigkill sigstop getattr getsched fork
+    };
+    class process2 { nnp_transition };
+    class file {
+        read write open getattr setattr execute execute_no_trans entrypoint map
+        create unlink rename lock ioctl
+    };
+    class dir { read search getattr open add_name remove_name write };
+    class sock_file { create write unlink getattr };
+    class lnk_file { read getattr };
+    class chr_file { read write open getattr ioctl };
+    class fd use;
+}
+
+type terok_clearance_hub_t;
+
+# Role associations — ``unconfined_r`` for the cheap-context path
+# used by the systemd directive
+# (``unconfined_u:unconfined_r:terok_clearance_hub_t:s0``);
+# ``system_r`` kept for back-compat with anything probing the
+# system-context form.
+role unconfined_r types terok_clearance_hub_t;
+role system_r types terok_clearance_hub_t;
+
+# Transition allows — required for the unconfined_t→terok_clearance_hub_t
+# domain change requested by the systemd directive.  Both
+# ``process:transition`` (always required) and
+# ``process2:nnp_transition`` (required because clearance unit
+# templates set NoNewPrivileges=yes) are needed.
+allow unconfined_t terok_clearance_hub_t:process { transition siginh rlimitinh noatsecure };
+allow unconfined_t terok_clearance_hub_t:process2 nnp_transition;
+
+# See matching block in terok-sandbox's terok_vault.te.  Without
+# these, ``systemctl --user stop/restart`` can't deliver signals
+# into the confined domain, leaving orphan processes.
+allow unconfined_t terok_clearance_hub_t:process { signal sigkill signull sigstop getattr };
+
+# Read ``/proc/<pid>/attr/*`` of confined processes from unconfined_t
+# — see matching comment in terok-sandbox's terok_vault.te.
+allow unconfined_t terok_clearance_hub_t:file { read open getattr };
+allow unconfined_t terok_clearance_hub_t:dir { read open search getattr };
+
+# Entrypoint allows — the actually-execed binary must be a valid
+# entrypoint to the target domain.  Hub is exec'd as the venv-installed
+# python interpreter (under user_home_t).
+allow terok_clearance_hub_t bin_t:file { entrypoint execute read open getattr };
+allow terok_clearance_hub_t user_home_t:file { entrypoint execute read open getattr };
+
+# Self-perms — broad initial set; tightening (esp. file/dir access on
+# the varlink socket path under XDG_RUNTIME_DIR, the SQLite-or-
+# whatever-it-uses state) is driven by AVCs collected during the soak.
+allow terok_clearance_hub_t self:process { sigchld signull signal };
+allow terok_clearance_hub_t self:fd use;
+allow terok_clearance_hub_t self:unix_stream_socket {
+    create bind listen accept
+    read write getattr getopt setopt shutdown
+    connectto
+};
+
+# systemd handoff (manager passes inherited fds, signals).
+allow terok_clearance_hub_t init_t:fd use;
+allow terok_clearance_hub_t init_t:unix_stream_socket {
+    read write getattr getopt setopt shutdown
+};
+
+# Path-walk + state-dir access — same shape as the matching
+# block in terok_vault.te.  Hub also binds a varlink Unix socket
+# under ``$XDG_RUNTIME_DIR`` (user_tmp_t on Fedora) so allow
+# sock_file create/write/unlink there.
+allow terok_clearance_hub_t var_t:dir { search getattr };
+allow terok_clearance_hub_t home_root_t:dir { search getattr };
+allow terok_clearance_hub_t user_home_dir_t:dir { search getattr };
+allow terok_clearance_hub_t gconf_home_t:dir { search getattr };
+allow terok_clearance_hub_t data_home_t:dir {
+    search getattr open read add_name remove_name write
+};
+allow terok_clearance_hub_t data_home_t:file {
+    read write open getattr setattr create unlink rename lock
+};
+allow terok_clearance_hub_t user_tmp_t:dir {
+    search getattr open read add_name remove_name write
+};
+allow terok_clearance_hub_t user_tmp_t:sock_file { create write unlink getattr };
+
+# ---- First-soak runtime allows (CPython startup + std reads) ----
+#
+# Surfaced wholesale by the first soak iteration on Fedora.  Every
+# Python-based daemon hits these at import time before main() runs:
+# interpreter mmap, ld.so cache, libpython, locale archive, /proc
+# self-introspection, sysctl knobs, /dev/null, TLS cert bundle.
+# Adding them in a single block now (rather than chasing one AVC at
+# a time across PR revisions) lets the soak focus on application-
+# specific surfaces in subsequent iterations.
+
+# Interpreter + dynamic loader.
+allow terok_clearance_hub_t bin_t:dir { getattr search };
+allow terok_clearance_hub_t bin_t:file map;
+allow terok_clearance_hub_t lib_t:dir { getattr open read search };
+allow terok_clearance_hub_t lib_t:file { execute getattr map open read };
+allow terok_clearance_hub_t lib_t:lnk_file read;
+allow terok_clearance_hub_t ld_so_t:file { execute map read };
+allow terok_clearance_hub_t ld_so_cache_t:file { getattr map open read };
+allow terok_clearance_hub_t usr_t:dir { getattr search };
+allow terok_clearance_hub_t usr_t:file { getattr open read };
+allow terok_clearance_hub_t etc_t:dir search;
+allow terok_clearance_hub_t etc_t:lnk_file read;
+allow terok_clearance_hub_t root_t:dir search;
+
+# Pipx venv shims (gconf_home_t covers ~/.local/bin lnk_file; data_home_t
+# covers the executable + .so files inside the venv tree).
+allow terok_clearance_hub_t data_home_t:file { execute map };
+allow terok_clearance_hub_t data_home_t:lnk_file { getattr read };
+
+# /proc self-introspection — Python reads /proc/self/maps at startup.
+allow terok_clearance_hub_t proc_t:dir search;
+allow terok_clearance_hub_t proc_t:lnk_file read;
+allow terok_clearance_hub_t self:dir search;
+allow terok_clearance_hub_t self:file { getattr open read };
+allow terok_clearance_hub_t self:process getsched;
+
+# Sysctl knobs Python pokes for sizing decisions
+# (vm.overcommit_memory) and crypto policy lookup.
+allow terok_clearance_hub_t sysctl_t:dir search;
+allow terok_clearance_hub_t sysctl_vm_t:dir search;
+allow terok_clearance_hub_t sysctl_vm_overcommit_t:file { open read };
+allow terok_clearance_hub_t sysctl_crypto_t:dir search;
+allow terok_clearance_hub_t sysctl_crypto_t:file { open read };
+
+# Locale archive (mmap'd by glibc for setlocale).
+allow terok_clearance_hub_t locale_t:dir search;
+allow terok_clearance_hub_t locale_t:file { getattr map open read };
+allow terok_clearance_hub_t locale_t:lnk_file read;
+
+# /dev/null inherited from systemd's StandardOutput=/StandardError=
+# (drop-in still leaves these as the default journal pipe; the
+# kernel fd inherits null for the leak case).
+allow terok_clearance_hub_t null_device_t:chr_file { getattr ioctl read };
+
+# Inherited fds from kernel (initial systemd handoff) and from the
+# user's shell (sudo bridging during install/restart).
+allow terok_clearance_hub_t kernel_t:fd use;
+allow terok_clearance_hub_t unconfined_t:fd use;
+allow terok_clearance_hub_t unconfined_t:unix_stream_socket {
+    getattr ioctl read write
+};
+
+# /run runtime dir search (varlink socket lives under user_tmp_t but
+# walking /run/user/UID needs var_run_t search).
+allow terok_clearance_hub_t var_run_t:dir search;
+
+# TLS cert bundle (clearance hub may TLS-verify outbound HTTP for
+# webhook delivery in future; cheap to allow now).
+allow terok_clearance_hub_t cert_t:dir { getattr open read search };
+allow terok_clearance_hub_t cert_t:file { getattr open read };
+
+# Reading the user's home dir (open/read for path enumeration when
+# scanning XDG_DATA_HOME on first launch).
+allow terok_clearance_hub_t user_home_dir_t:dir { open read };
+
+# ---- Cross-domain allows (non-permissive sources) ----
+#
+# These source domains are NOT permissive on the host, so denials
+# from them BLOCK regardless of terok_clearance_hub_t's permissive
+# marking.  Each one was breaking real functionality:
+#
+# * unconfined_t connectto: terok CLI (+ asyncio in-process
+#   callers) reaching the hub's varlink socket.  Without this,
+#   ``terok clearance`` returns nothing and SickbayPanel logs
+#   "clearance hub unavailable: [Errno 13] Permission denied".
+# * container_runtime_t connectto: podman / OCI hooks reaching
+#   ``/run/user/UID/terok-shield-events.sock`` to publish container
+#   start/stop events.  Without this, the notifier sees nothing
+#   for the entire task lifecycle.
+#
+# The socket inherits the hub's process-domain label because the
+# hub doesn't currently call ``setsockcreatecon()``.  A future
+# refactor could split out a ``terok_clearance_hub_sock_t`` (mirror
+# of the per-service socket types in terok-sandbox), but for now
+# allowing connectto on the process domain is the targeted fix.
+allow unconfined_t terok_clearance_hub_t:unix_stream_socket connectto;
+allow container_runtime_t terok_clearance_hub_t:unix_stream_socket connectto;
+
+# pidof / ps reading /proc/<pid>/exe of confined daemons.
+allow unconfined_t terok_clearance_hub_t:lnk_file read;
+allow unconfined_t terok_clearance_hub_t:file ioctl;
+
+# systemd-journald reading /proc/<pid>/{cgroup,comm,...} of confined
+# daemons for log-field enrichment.  Without this, journald log
+# lines for hub messages lose the unit/container_id/etc. metadata.
+allow syslogd_t terok_clearance_hub_t:dir search;
+allow syslogd_t terok_clearance_hub_t:file { read open getattr ioctl };
+allow syslogd_t terok_clearance_hub_t:lnk_file read;
+# v1.5: journald also getattrs the process itself (for the comm
+# log-line) and ioctls /proc/PID/{comm,cgroup,status}; without
+# these the journald log entries lose their _COMM, _CGROUP,
+# _SYSTEMD_UNIT field stamps.
+allow syslogd_t terok_clearance_hub_t:process getattr;
