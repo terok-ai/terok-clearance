@@ -35,13 +35,7 @@ class TestHeadlessFallback:
         assert nid == 0
 
     def test_cli_prints_zero_without_bus(self):
-        """terok-clearance-notify prints '0' and exits 0 when bus is absent.
-
-        Also asserts stderr is silent — a headless cron caller piping
-        stderr to a log would otherwise see the dbus-fast traceback on
-        every fire, which is precisely the operational noise the
-        fallback is meant to suppress.
-        """
+        """terok-clearance-notify prints '0' and exits 0 when bus is absent."""
         env = {k: v for k, v in __import__("os").environ.items() if k != "DBUS_SESSION_BUS_ADDRESS"}
         result = subprocess.run(
             [sys.executable, "-m", "terok_clearance.cli.main", "notify", "Headless", "Test"],
@@ -52,4 +46,6 @@ class TestHeadlessFallback:
         )
         assert result.returncode == 0
         assert result.stdout.strip() == "0"
+        # stderr is the regression channel: a noisy dbus-fast traceback
+        # here is exactly the operational noise the fallback suppresses.
         assert result.stderr == "", f"Headless CLI leaked to stderr: {result.stderr!r}"
