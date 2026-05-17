@@ -137,6 +137,15 @@ def _icon_theme_search_dirs() -> list[Path]:
     return [Path(home), *(Path(p) for p in system.split(":") if p)]
 
 
+#: Module-level cache for the resolved icon-theme entry.  Set on the
+#: first call that finds ``terok-symbolic`` under any XDG search dir;
+#: kept ``None`` while the entry is absent so post-startup ``terok
+#: setup`` is picked up at the next notification.  Once locked in,
+#: subsequent calls are an attribute load with zero syscalls — the
+#: dirs we'd otherwise probe might live on a slow / network mount.
+_RESOLVED_ICON_NAME: str | None = None
+
+
 def _default_app_icon() -> str:
     """Resolve the icon to pass as ``app_icon`` for every notification.
 
@@ -158,12 +167,19 @@ def _default_app_icon() -> str:
     data; tests against a half-built source tree).  Callers fall
     through to no icon.
 
-    Evaluated per call so clearance picks up the icon-theme entry as
-    soon as ``terok setup`` runs, without needing a daemon restart.
+    Caching: the happy path (icon-theme entry found) is memoised in
+    ``_RESOLVED_ICON_NAME`` after the first successful lookup, so
+    steady-state calls are free.  The miss case keeps re-resolving so
+    ``terok setup`` running after clearance starts is picked up on the
+    next notification — no daemon restart needed.
     """
+    global _RESOLVED_ICON_NAME
+    if _RESOLVED_ICON_NAME is not None:
+        return _RESOLVED_ICON_NAME
     for d in _icon_theme_search_dirs():
         if (d / _SYMBOLIC_ICON_REL).is_file():
-            return _SYMBOLIC_ICON_NAME
+            _RESOLVED_ICON_NAME = _SYMBOLIC_ICON_NAME
+            return _RESOLVED_ICON_NAME
     if _LOGO_PATH.is_file():
         return _LOGO_PATH.as_uri()
     return ""

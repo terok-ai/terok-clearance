@@ -12,6 +12,22 @@ import pytest
 from terok_clearance.notifications.desktop import DbusNotifier
 
 
+@pytest.fixture(autouse=True)
+def _reset_app_icon_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reset the resolved-icon cache before every test.
+
+    `_default_app_icon` memoises the first successful icon-theme lookup
+    in `_RESOLVED_ICON_NAME` — otherwise the first test that plants a
+    fake `terok-symbolic.svg` under tmp_path locks in ``"terok-symbolic"``
+    for every subsequent test, breaking the file-URI fallback assertions.
+    """
+    monkeypatch.setattr(
+        "terok_clearance.notifications.desktop._RESOLVED_ICON_NAME",
+        None,
+        raising=False,
+    )
+
+
 def _mock_bus() -> MagicMock:
     """Create a mock MessageBus with proxy + signal-pipeline wiring."""
     iface = MagicMock()
@@ -259,6 +275,35 @@ class TestDbusNotifierNotify:
         monkeypatch.setenv("XDG_DATA_DIRS", "")
 
         assert _default_app_icon() == "terok-symbolic"
+
+    async def test_default_icon_caches_happy_path(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Once the icon-theme entry is found, subsequent calls return it without re-walking XDG.
+
+        XDG dirs can sit on slow / network mounts; the success case is
+        memoised so steady-state notifications cost an attribute load.
+        Miss case stays uncached so post-startup `terok setup` is picked
+        up on the next call without a daemon restart.
+        """
+        from terok_clearance.notifications import desktop
+
+        theme_path = tmp_path / "icons" / "hicolor" / "symbolic" / "apps"
+        theme_path.mkdir(parents=True)
+        icon_file = theme_path / "terok-symbolic.svg"
+        icon_file.write_text("<svg/>")
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+        monkeypatch.setenv("XDG_DATA_DIRS", "")
+
+        assert desktop._default_app_icon() == "terok-symbolic"
+
+        # Pull the icon back out from under the resolver: a fresh probe
+        # would now return the file-URI fallback, but the cached value
+        # holds steady.
+        icon_file.unlink()
+        assert desktop._default_app_icon() == "terok-symbolic"
 
 
 class TestDbusNotifierActions:
