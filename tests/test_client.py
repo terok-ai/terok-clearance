@@ -260,7 +260,7 @@ async def test_reconnects_after_hub_restart(private_runtime_dir: Path) -> None:
     sock_path = private_runtime_dir / "clearance.sock"
     reader_path = private_runtime_dir / "reader.sock"
     hub_1 = ClearanceHub(clearance_socket=sock_path, reader_socket=reader_path)
-    hub_1._run_shield = _stub_shield_ok
+    hub_1._verdict_client.apply = _stub_shield_ok
     await hub_1.start()
 
     received: list = []
@@ -276,7 +276,7 @@ async def test_reconnects_after_hub_restart(private_runtime_dir: Path) -> None:
     await hub_1.stop()
     await asyncio.sleep(0.05)  # let the client's stream task observe the reset
     hub_2 = ClearanceHub(clearance_socket=sock_path, reader_socket=reader_path)
-    hub_2._run_shield = _stub_shield_ok
+    hub_2._verdict_client.apply = _stub_shield_ok
     await hub_2.start()
 
     # Skip the client's back-off sleep so the test doesn't drag.

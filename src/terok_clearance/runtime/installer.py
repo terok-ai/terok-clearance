@@ -15,11 +15,6 @@ The clearance flow splits across two units:
 Both run the same ``terok-clearance-hub`` launcher with different
 subcommands (``serve`` vs ``serve-verdict``), so [`install_service`][terok_clearance.runtime.installer.install_service]
 takes one ``bin_path`` and writes both units.
-
-Legacy migration: earlier releases shipped one monolithic
-``terok-dbus.service``.  On first post-split install the legacy unit
-is disabled + unlinked before the new pair goes down, so operators
-don't end up running two hubs against the same socket.
 """
 
 from __future__ import annotations
@@ -51,9 +46,6 @@ HUB_UNIT_NAME = "terok-clearance-hub.service"
 VERDICT_UNIT_NAME = "terok-clearance-verdict.service"
 NOTIFIER_UNIT_NAME = "terok-clearance-notifier.service"
 
-#: Name of the pre-split monolithic unit we migrate away from.
-_LEGACY_UNIT_NAME = "terok-dbus.service"
-
 #: ``(unit_filename, version_marker_prefix)`` pairs for the hub+verdict
 #: pair installed by [`install_service`][terok_clearance.runtime.installer.install_service].  The subcommand
 #: (``serve`` vs ``serve-verdict``) is baked into each template's
@@ -76,14 +68,6 @@ Bump when either of those two templates changes semantics — e.g.
 hardening directives, socket paths, argv shape.  ``_NOTIFIER_UNIT_VERSION``
 stays untouched so notifier-only edits don't falsely report hub/verdict
 as stale, and vice versa.
-
-Version history:
-    3 — version-stamp marker moves to line 1 (cross-package convention
-        with terok-sandbox; line-1 ownership check is the contract).
-    2 — verdict gains ``AmbientCapabilities=`` and
-        ``RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6``.
-    1 — initial split (hub fully hardened; verdict carries the
-        minimum that doesn't break the shield re-exec).
 """
 
 _NOTIFIER_UNIT_VERSION = 5
@@ -93,52 +77,13 @@ Kept independent of the hub/verdict pair so each install target can
 evolve on its own cadence — the three units ship different ExecStart
 shapes, different hardening profiles, and different dependencies on
 the session bus.
-
-Version history:
-    5 — comment block documenting the
-        ``TEROK_CLEARANCE_NOTIFY_EVENTS`` env var + recommended
-        ``systemctl --user edit`` drop-in workflow added to the unit
-        header.  Unit semantics unchanged but the bump nudges
-        operators on existing installs to refresh and pick up the
-        new in-file documentation.
-    4 — version-stamp marker moves to line 1 (cross-package convention
-        with terok-sandbox; line-1 ownership check is the contract).
-    3 — ``ProtectHome=tmpfs`` + ``BindReadOnlyPaths=%h/.../pipx/...``
-        replaced with the simpler ``ProtectHome=read-only``.  On
-        Fedora-Atomic-style hosts (``/home`` symlinked to
-        ``/var/home``) the tmpfs+bind combo cooperated badly with
-        systemd's ``%h`` resolution and the notifier could end up
-        with no importable Python at all — silently zero desktop
-        popups.  Read-only is threat-equivalent against the
-        gnome-shell markup-injection vector that hardening targets
-        and works regardless of the venv's actual on-disk path.
-    2 — full hub-style hardening profile (ProtectClock,
-        Protect{Kernel*,Hostname,Proc}, ProcSubset, PrivateDevices,
-        PrivateTmp, PrivateNetwork, ProtectSystem=full, ProtectHome=tmpfs,
-        BindReadOnlyPaths for the venv, MemoryDenyWriteExecute,
-        SystemCallFilter, RestrictNamespaces).  Identity resolution
-        moved to the shield reader (per-event dossier), so the notifier
-        no longer forks ``podman inspect`` and can take all the
-        namespace/seccomp directives the hub already has.
-    1 — initial profile with the directives that don't break podman
-        inspect (NoNewPrivileges, LockPersonality, RestrictRealtime,
-        RestrictSUIDSGID, SystemCallArchitectures, KeyringMode, UMask,
-        IPAddressDeny, RestrictAddressFamilies=AF_UNIX).
 """
-
-# Backwards-compatible alias — the unit name the legacy installer
-# exposed as ``UNIT_NAME``.  Kept so out-of-tree tests or tooling that
-# reached for it don't silently break; new code should use
-# [`HUB_UNIT_NAME`][terok_clearance.runtime.installer.HUB_UNIT_NAME].
-UNIT_NAME = HUB_UNIT_NAME
 
 
 def install_service(bin_path: Path | list[str] | None = None) -> tuple[Path, Path]:
     """Render + write both unit files into the user systemd directory.
 
-    Also disables + unlinks any leftover pre-split ``terok-dbus.service``
-    so the operator ends up with exactly the new pair running.  Calls
-    ``systemctl --user daemon-reload`` once at the end.
+    Calls ``systemctl --user daemon-reload`` once at the end.
 
     Args:
         bin_path: ``Path`` to the ``terok-clearance-hub`` launcher, or
@@ -151,7 +96,6 @@ def install_service(bin_path: Path | list[str] | None = None) -> tuple[Path, Pat
         ``(hub_path, verdict_path)`` — the on-disk paths of the two
         unit files.
     """
-    _uninstall_legacy()
     bin_rendered = _render_exec_start(bin_path if bin_path is not None else list(_DEFAULT_HUB_ARGV))
     dest_dir = _user_systemd_dir()
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -169,7 +113,7 @@ def install_service(bin_path: Path | list[str] | None = None) -> tuple[Path, Pat
 
 
 def uninstall_service() -> None:
-    """Disable + unlink both new units + any pre-split legacy leftover.
+    """Disable + unlink the hub + verdict units; daemon-reload once.
 
     Symmetric teardown for [`install_service`][terok_clearance.runtime.installer.install_service] — ``terok uninstall``
     calls this instead of rolling its own systemctl + unlink sequence.
@@ -177,7 +121,7 @@ def uninstall_service() -> None:
     drops the now-missing units.  All individual steps soft-fail so a
     half-installed tree still ends up clean.
     """
-    for name in (HUB_UNIT_NAME, VERDICT_UNIT_NAME, _LEGACY_UNIT_NAME):
+    for name in (HUB_UNIT_NAME, VERDICT_UNIT_NAME):
         _disable_and_unlink(name)
     _daemon_reload()
 
@@ -221,17 +165,6 @@ def uninstall_notifier_service() -> None:
     """
     _disable_and_unlink(NOTIFIER_UNIT_NAME)
     _daemon_reload()
-
-
-def _uninstall_legacy() -> None:
-    """Disable + unlink the pre-split monolithic unit if it's installed.
-
-    Runs before the new units land so a user with an existing
-    ``terok-dbus.service`` doesn't end up with two long-running hubs
-    racing for the same varlink socket.  Silent when systemctl is
-    absent (CI containers) or the legacy unit isn't there.
-    """
-    _disable_and_unlink(_LEGACY_UNIT_NAME)
 
 
 def _disable_and_unlink(unit_name: str) -> None:
@@ -312,26 +245,12 @@ def _daemon_reload() -> None:
     )
 
 
-def read_installed_unit() -> str | None:
-    """Return the hub unit's file contents, or ``None`` if absent.
-
-    Kept for backwards compatibility with out-of-tree callers that
-    grew used to the pre-split single-unit API — reads the hub unit
-    (the one that was formerly ``terok-dbus.service``).
-    """
-    path = _user_systemd_dir() / HUB_UNIT_NAME
-    try:
-        return path.read_text()
-    except OSError:
-        return None
-
-
 def read_installed_unit_version() -> int | None:
     """Return the hub unit's ``# terok-clearance-hub-version:`` stamp, or ``None``.
 
     ``None`` is either "unit not installed" or "unit installed without
-    a marker" (the pre-split legacy unit) — ``check_units_outdated``
-    differentiates between those in its operator-facing message.
+    a marker"; ``check_units_outdated`` differentiates between those
+    in its operator-facing message.
     """
     return _version_for(HUB_UNIT_NAME, _HUB[1])
 
@@ -378,16 +297,8 @@ def check_units_outdated() -> str | None:
     hosts may install it later, or not at all).  ``None`` is returned
     when neither pair nor notifier is installed (headless host, or
     no setup command has run yet); a one-sided hub/verdict pair is
-    reported as stale so the operator is prompted to restore it.  A
-    legacy ``terok-dbus.service`` on disk counts as "stale" so the
-    operator is prompted to rerun setup and get the split pair.
+    reported as stale so the operator is prompted to restore it.
     """
-    legacy = _user_systemd_dir() / _LEGACY_UNIT_NAME
-    if legacy.is_file():
-        return (
-            f"{_LEGACY_UNIT_NAME} is from a pre-split release — "
-            f"{_RERUN_HINT} to migrate to the hub/verdict pair."
-        )
     if (verdict := _check_pair_outdated()) is not None:
         return verdict
     return _check_notifier_outdated()
