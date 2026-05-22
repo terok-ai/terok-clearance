@@ -52,7 +52,7 @@ from terok_clearance.client.subscriber import (
     EventSubscriber,
 )
 from terok_clearance.commands import COMMANDS, ArgDef, CommandDef
-from terok_clearance.domain.events import ClearanceEvent
+from terok_clearance.domain.events import VERDICT_ACTIONS, ClearanceEvent, VerdictAction
 from terok_clearance.hub.server import ClearanceHub, serve
 from terok_clearance.notifications.callback import CallbackNotifier, Notification
 from terok_clearance.notifications.desktop import DbusNotifier
@@ -106,6 +106,8 @@ __all__ = [
     "NullNotifier",
     "ShieldCliFailed",
     "UnknownRequest",
+    "VERDICT_ACTIONS",
+    "VerdictAction",
     "VerdictTupleMismatch",
     "check_units_outdated",
     "configure_logging",

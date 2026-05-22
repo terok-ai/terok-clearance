@@ -19,6 +19,7 @@ import logging
 import signal
 import sys
 
+from terok_clearance.domain.events import VerdictAction
 from terok_clearance.notifications.callback import CallbackNotifier, Notification
 
 _log = logging.getLogger(__name__)
@@ -102,7 +103,7 @@ class _TerminalClearance:
             print(f"No pending request [{nid}]")  # noqa: T201
             return
 
-        action = "accept" if cmd in ("a", "allow") else "deny"
+        action: VerdictAction = "allow" if cmd in ("a", "allow") else "deny"
         self._notifier.invoke_action(nid, action)
 
     async def run(self) -> None:
