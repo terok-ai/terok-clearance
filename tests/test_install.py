@@ -19,7 +19,6 @@ from terok_clearance.runtime.installer import (
     install_notifier_service,
     install_service,
     read_installed_notifier_unit_version,
-    read_installed_unit,
     read_installed_unit_version,
 )
 
@@ -73,27 +72,6 @@ class TestInstallService:
         assert "-m terok_clearance.cli.main serve" in hub_body
         assert "-m terok_clearance.cli.main serve-verdict" in verdict_body
 
-    def test_migrates_legacy_terok_dbus_service(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """A leftover pre-split ``terok-dbus.service`` is disabled + unlinked."""
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-        systemd_dir = tmp_path / "systemd" / "user"
-        systemd_dir.mkdir(parents=True)
-        legacy = systemd_dir / "terok-dbus.service"
-        legacy.write_text("[Unit]\nDescription=pre-split monolith\n")
-        with (
-            patch.object(_install, "_daemon_reload"),
-            patch.object(_install.shutil, "which", return_value="/bin/systemctl"),
-            patch.object(_install.subprocess, "run") as run,
-        ):
-            install_service(Path("/a/terok-clearance-hub"))
-        assert not legacy.exists()
-        # systemctl was invoked once to disable the legacy unit.
-        disable_call = run.call_args_list[0]
-        assert "disable" in disable_call.args[0]
-        assert "terok-dbus.service" in disable_call.args[0]
-
 
 class TestRenderExecStart:
     """Each argv token is quoted individually — spaces don't leak across boundaries."""
@@ -117,26 +95,6 @@ class TestRenderExecStart:
     def test_control_characters_are_refused(self) -> None:
         with pytest.raises(ValueError):
             _install._render_exec_start(Path("/a/terok-clearance-hub\nRestart=never"))
-
-
-class TestReadInstalledUnit:
-    """``read_installed_unit`` returns the hub unit's text, or None when absent."""
-
-    def test_returns_text_when_present(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-        with patch.object(_install, "_daemon_reload"):
-            install_service(Path("/a/terok-clearance-hub"))
-        text = read_installed_unit()
-        assert text is not None
-        assert "/a/terok-clearance-hub serve" in text
-
-    def test_returns_none_when_absent(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-        assert read_installed_unit() is None
 
 
 class TestUnitVersion:
@@ -231,19 +189,6 @@ class TestUnitVersion:
         """No unit installed is headless-host shape, not a drift warning."""
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
         assert check_units_outdated() is None
-
-    def test_check_outdated_flags_legacy_unit(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Pre-split ``terok-dbus.service`` on disk → prompt to rerun setup."""
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-        legacy = tmp_path / "systemd" / "user" / "terok-dbus.service"
-        legacy.parent.mkdir(parents=True)
-        legacy.write_text("[Unit]\nDescription=pre-split monolith\n")
-        msg = check_units_outdated()
-        assert msg is not None
-        assert "terok-dbus.service" in msg
-        assert "setup" in msg
 
     def test_check_outdated_flags_unversioned_unit(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

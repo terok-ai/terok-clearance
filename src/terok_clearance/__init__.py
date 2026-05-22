@@ -35,9 +35,8 @@ Two unrelated wire formats live under this one package as a result:
   per-container block / verdict / lifecycle flow.
 * ``org.freedesktop.Notifications`` over **D-Bus** — the
   [`DbusNotifier`][terok_clearance.DbusNotifier] wrapper that renders those events as desktop
-  popups.  Kept because that's the OS API; every other D-Bus path in
-  this package (``org.terok.Shield1``) was removed in favour of the
-  varlink transport.
+  popups.  Kept because that's the OS API; the in-package transport
+  is varlink.
 """
 
 from terok_clearance.client.client import ClearanceClient
