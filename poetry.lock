@@ -1493,7 +1493,7 @@ version = "4.9.6"
 description = "A small Python package for determining appropriate platform-specific dirs, e.g. a `user data dir`."
 optional = false
 python-versions = ">=3.10"
-groups = ["dev", "docs"]
+groups = ["main", "dev", "docs"]
 files = [
     {file = "platformdirs-4.9.6-py3-none-any.whl", hash = "sha256:e61adb1d5e5cb3441b4b7710bea7e4c12250ca49439228cc1021c00dcfac0917"},
     {file = "platformdirs-4.9.6.tar.gz", hash = "sha256:3bfa75b0ad0db84096ae777218481852c0ebc6c727b3168c1b9e0118e458cf0a"},
@@ -1956,6 +1956,24 @@ pygments = ">=2.13.0,<3.0.0"
 jupyter = ["ipywidgets (>=7.5.1,<9)"]
 
 [[package]]
+name = "ruamel-yaml"
+version = "0.19.1"
+description = "ruamel.yaml is a YAML parser/emitter that supports roundtrip preservation of comments, seq/map flow style, and map key order"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "ruamel_yaml-0.19.1-py3-none-any.whl", hash = "sha256:27592957fedf6e0b62f281e96effd28043345e0e66001f97683aa9a40c667c93"},
+    {file = "ruamel_yaml-0.19.1.tar.gz", hash = "sha256:53eb66cd27849eff968ebf8f0bf61f46cdac2da1d1f3576dd4ccee9b25c31993"},
+]
+
+[package.extras]
+docs = ["mercurial (>5.7)", "ryd"]
+jinja2 = ["ruamel.yaml.jinja2 (>=0.2)"]
+libyaml = ["ruamel.yaml.clibz (>=0.3.7) ; platform_python_implementation == \"CPython\""]
+oldlibyaml = ["ruamel.yaml.clib ; platform_python_implementation == \"CPython\""]
+
+[[package]]
 name = "ruff"
 version = "0.15.13"
 description = "An extremely fast Python linter and code formatter, written in Rust."
@@ -2078,6 +2096,26 @@ pyyaml = ">=6.0,<7.0"
 rich = ">=13.0"
 tomli = ">=1.2.2"
 tomli-w = ">=1.0,<2.0"
+
+[[package]]
+name = "terok-util"
+version = "0.0.0"
+description = "Shared utility library for the terok-* sibling packages"
+optional = false
+python-versions = ">=3.12,<4.0"
+groups = ["main"]
+files = []
+develop = false
+
+[package.dependencies]
+platformdirs = ">=4.9.6"
+"ruamel.yaml" = ">=0.18"
+
+[package.source]
+type = "git"
+url = "https://github.com/terok-ai/terok-util.git"
+reference = "refs/pull/1/head"
+resolved_reference = "0250710f55925e83b6176af6c2b31d8cc794a79c"
 
 [[package]]
 name = "tomli"
@@ -2319,4 +2357,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "28362f4ae1b619cadc8dace0eba9fae5669c279bcf0ea09948601fc193c44a30"
+content-hash = "9509010b96b904b28ce3d754aa359d15135e302353686b4a366a4569ce34d23e"

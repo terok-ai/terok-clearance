@@ -39,6 +39,8 @@ Two unrelated wire formats live under this one package as a result:
   is varlink.
 """
 
+from terok_util import ArgDef, CommandDef
+
 from terok_clearance.client.client import ClearanceClient
 from terok_clearance.client.subscriber import (
     ALL_NOTIFY_CATEGORIES,
@@ -50,7 +52,7 @@ from terok_clearance.client.subscriber import (
     NOTIFY_VERDICT,
     EventSubscriber,
 )
-from terok_clearance.commands import COMMANDS, ArgDef, CommandDef
+from terok_clearance.commands import COMMANDS
 from terok_clearance.domain.events import VERDICT_ACTIONS, ClearanceEvent, VerdictAction
 from terok_clearance.hub.server import ClearanceHub, serve
 from terok_clearance.notifications.callback import CallbackNotifier, Notification

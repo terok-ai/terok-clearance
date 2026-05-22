@@ -3,59 +3,18 @@
 
 """Command registry for terok-clearance.
 
-Provides [`CommandDef`][terok_clearance.commands.CommandDef] and
-[`ArgDef`][terok_clearance.commands.ArgDef] dataclasses describing every
-``terok-clearance`` subcommand.  The ``COMMANDS`` tuple is the single
-source of truth consumed by both the standalone CLI and the terok
-integration layer.
+Re-exports [`CommandDef`][terok_util.cli_types.CommandDef] and
+[`ArgDef`][terok_util.cli_types.ArgDef] from
+[`terok_util`][terok_util] — the shared CLI vocabulary every terok-`*`
+sibling package now lines up on — and defines the ``COMMANDS`` tuple as
+the single source of truth consumed by both the standalone CLI and the
+terok integration layer.
 
 Handler functions are async coroutines accepting ``**kwargs`` that match
-the declared [`ArgDef`][terok_clearance.commands.ArgDef] names.
+the declared [`ArgDef`][terok_util.cli_types.ArgDef] names.
 """
 
-from collections.abc import Callable, Coroutine
-from dataclasses import dataclass
-from typing import Any
-
-
-@dataclass(frozen=True)
-class ArgDef:
-    """Definition of a single CLI argument for a command."""
-
-    name: str
-    help: str = ""
-    type: Callable[[str], Any] | None = None
-    default: Any = None
-    action: str | None = None
-    dest: str | None = None
-    nargs: int | str | None = None
-
-
-@dataclass(frozen=True)
-class CommandDef:
-    """Definition of a terok-clearance subcommand.
-
-    Structurally compatible with terok-sandbox's ``CommandDef``: same
-    attribute names + ``children`` for nested verb groups, so
-    downstream consumers (terok) can wire the registry through
-    sandbox's ``CommandTree`` without per-package adapters.
-
-    Attributes:
-        name: Subcommand name (e.g. ``"notify"``).
-        help: One-line help string for ``--help``.
-        handler: Async callable implementing the command logic.
-        args: CLI arguments beyond the subcommand name.
-        children: Sub-verbs.  Empty for every existing clearance verb —
-            present for structural compatibility with the unified
-            CommandDef shape across the terok-ai ecosystem.
-    """
-
-    name: str
-    help: str = ""
-    handler: Callable[..., Coroutine[Any, Any, None]] | None = None
-    args: tuple[ArgDef, ...] = ()
-    children: tuple["CommandDef", ...] = ()
-
+from terok_util import ArgDef, CommandDef
 
 # ── Handler functions ─────────────────────────────────────
 

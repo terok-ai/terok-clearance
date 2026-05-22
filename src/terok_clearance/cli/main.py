@@ -12,11 +12,13 @@ import argparse
 import asyncio
 import sys
 
-from terok_clearance.commands import COMMANDS, ArgDef
+from terok_util import ArgDef
+
+from terok_clearance.commands import COMMANDS
 
 
 def _add_arg(parser: argparse.ArgumentParser, arg: ArgDef) -> None:
-    """Register an [`ArgDef`][terok_clearance.cli.main.ArgDef] with an argparse parser."""
+    """Register an [`ArgDef`][terok_util.cli_types.ArgDef] with an argparse parser."""
     kwargs: dict = {}
     if arg.help:
         kwargs["help"] = arg.help
