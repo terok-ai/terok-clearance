@@ -29,7 +29,7 @@ from pathlib import Path
 from asyncvarlink import VarlinkInterfaceRegistry, VarlinkUnixServer, create_unix_server
 from asyncvarlink.serviceinterface import VarlinkServiceInterface
 
-from terok_clearance.domain.events import ClearanceEvent, Dossier
+from terok_clearance.domain.events import VERDICT_ACTIONS, ClearanceEvent, Dossier
 from terok_clearance.hub.ingester import EventIngester
 from terok_clearance.verdict.client import VerdictClient
 from terok_clearance.wire.errors import (
@@ -295,7 +295,7 @@ class ClearanceHub:
         every subscriber (including the one that called us) sees the
         same outcome.
         """
-        if action not in {"allow", "deny"}:
+        if action not in VERDICT_ACTIONS:
             raise InvalidAction(action=action)
         live = self._live_verdicts.pop(request_id, None)
         if live is None:

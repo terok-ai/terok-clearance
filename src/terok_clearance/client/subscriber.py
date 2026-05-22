@@ -29,6 +29,7 @@ from terok_clearance.domain.events import (
     DOSSIER_NAME,
     DOSSIER_PROJECT,
     DOSSIER_TASK,
+    VERDICT_ACTIONS,
     ClearanceEvent,
     Dossier,
 )
@@ -412,7 +413,7 @@ class EventSubscriber:
         nid = await self._notifier.notify(
             f"Blocked: {target}:{event.port}",
             _blocked_body(dossier, event.container, proto_name, count, first_seen),
-            actions=[("allow", "Allow"), ("deny", "Deny")],
+            actions=[(a, a.capitalize()) for a in VERDICT_ACTIONS],
             hints=_HINT_BLOCK_PENDING,
             timeout_ms=0,
             replaces_id=prior.notification_id if prior else 0,

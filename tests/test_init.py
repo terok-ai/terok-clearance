@@ -40,6 +40,8 @@ class TestPublicApi:
             "NullNotifier",
             "ShieldCliFailed",
             "UnknownRequest",
+            "VERDICT_ACTIONS",
+            "VerdictAction",
             "VerdictTupleMismatch",
             "check_units_outdated",
             "configure_logging",

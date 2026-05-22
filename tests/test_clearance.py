@@ -14,6 +14,7 @@ import pytest
 
 from terok_clearance.cli.terminal_clearance import _TerminalClearance, run_clearance
 from terok_clearance.commands import COMMANDS
+from terok_clearance.domain.events import VERDICT_ACTIONS
 from terok_clearance.notifications.callback import Notification
 
 
@@ -36,7 +37,7 @@ class TestOnNotify:
     def test_new_blocked_connection(self, capsys) -> None:
         """A notification with actions is added to pending and printed."""
         tc = _TerminalClearance()
-        n = _make_notification(actions=[("accept", "Allow")])
+        n = _make_notification(actions=[("allow", "Allow")])
         tc._on_notify(n)
         assert 1 in tc._pending
         assert "BLOCKED" in capsys.readouterr().out
@@ -85,13 +86,13 @@ class TestHandleInput:
     """Tests for _TerminalClearance._handle_input command parsing."""
 
     def test_allow(self) -> None:
-        """'a <N>' invokes the callback with 'accept'."""
+        """'a <N>' invokes the callback with the hub-accepted ``allow``."""
         tc = _TerminalClearance()
         cb = Mock()
         tc._notifier._callbacks[1] = cb
         tc._pending[1] = _make_notification()
         tc._handle_input("a 1")
-        cb.assert_called_once_with("accept")
+        cb.assert_called_once_with("allow")
 
     def test_allow_long_form(self) -> None:
         """'allow <N>' also works."""
@@ -100,7 +101,25 @@ class TestHandleInput:
         tc._notifier._callbacks[1] = cb
         tc._pending[1] = _make_notification()
         tc._handle_input("allow 1")
-        cb.assert_called_once_with("accept")
+        cb.assert_called_once_with("allow")
+
+    def test_handle_input_emits_hub_vocabulary(self) -> None:
+        """The string handed to the callback must be one the hub accepts.
+
+        Locks the terminal CLI to [`VERDICT_ACTIONS`][terok_clearance.domain.events.VERDICT_ACTIONS]
+        so any future vocabulary drift (``accept`` / ``permit`` / ``yes``…)
+        surfaces here rather than at the hub's `InvalidAction` refusal.
+        """
+        tc = _TerminalClearance()
+        captured: list[str] = []
+        tc._notifier._callbacks[1] = captured.append
+        tc._notifier._callbacks[2] = captured.append
+        tc._pending[1] = _make_notification()
+        tc._pending[2] = _make_notification(nid=2)
+        tc._handle_input("a 1")
+        tc._handle_input("d 2")
+        assert captured == ["allow", "deny"]
+        assert all(action in VERDICT_ACTIONS for action in captured)
 
     def test_deny(self) -> None:
         """'d <N>' invokes the callback with 'deny'."""

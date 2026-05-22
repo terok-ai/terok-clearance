@@ -18,6 +18,18 @@ named by the ``DOSSIER_*`` constants below.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
+
+#: Operator verdict on a blocked connection.  The full vocabulary lives
+#: in [`VERDICT_ACTIONS`][terok_clearance.domain.events.VERDICT_ACTIONS]
+#: — keep them in lock-step.
+VerdictAction = Literal["allow", "deny"]
+
+#: Wire-stable verdict values the hub accepts and the renderer expects.
+#: Single source of truth for the action vocabulary: the hub validator,
+#: the subscriber's notification buttons, and the terminal CLI all
+#: derive their string set from this tuple.
+VERDICT_ACTIONS: tuple[VerdictAction, ...] = ("allow", "deny")
 
 #: Type alias for the orchestrator-supplied identity bundle resolved
 #: by the shield reader at emit time.  Keys are the orchestrator's
