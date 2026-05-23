@@ -41,6 +41,7 @@ plugins:
         python:
           inventories:
             - https://docs.python.org/3/objects.inv
+            - https://terok-ai.github.io/terok-util/objects.inv
           options:
             docstring_style: google
             show_source: true
