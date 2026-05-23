@@ -23,7 +23,8 @@ import logging
 
 import pytest
 
-from terok_clearance import NullNotifier, create_notifier
+from terok_clearance import create_notifier
+from terok_clearance.notifications.factory import NullNotifier
 
 
 class TestFactorySilenceOnHeadless:

@@ -92,11 +92,6 @@ layer = "domain"
 depends_on = []
 
 [[modules]]
-path = "terok_clearance.notifications.null"
-layer = "infrastructure"
-depends_on = []
-
-[[modules]]
 path = "terok_clearance.notifications.callback"
 layer = "infrastructure"
 depends_on = []
@@ -111,7 +106,6 @@ path = "terok_clearance.notifications.factory"
 layer = "infrastructure"
 depends_on = [
     "terok_clearance.notifications.desktop",
-    "terok_clearance.notifications.null",
     # notifications.protocol sits in the domain layer — the infra →
     # domain dep is implicit via the layer hierarchy; listing it here
     # reads as "unused" to ``tach check``.
@@ -135,11 +129,6 @@ depends_on = [
 # Verdict — helper varlink service + hub-side client.  Stateless;
 # the hub handles all authz before forwarding a triple here.
 [[modules]]
-path = "terok_clearance.verdict.shield_exec"
-layer = "infrastructure"
-depends_on = []
-
-[[modules]]
 path = "terok_clearance.verdict.interface"
 layer = "wire"
 depends_on = []
@@ -159,7 +148,6 @@ path = "terok_clearance.verdict.server"
 layer = "infrastructure"
 depends_on = [
     "terok_clearance.runtime.service",
-    "terok_clearance.verdict.shield_exec",
 ]
 
 # Client — varlink consumer library.

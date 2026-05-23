@@ -5,7 +5,7 @@
 
 import pytest
 
-from terok_clearance.notifications.null import NullNotifier
+from terok_clearance.notifications.factory import NullNotifier
 
 
 @pytest.fixture

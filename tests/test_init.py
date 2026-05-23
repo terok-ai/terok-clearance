@@ -6,7 +6,10 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import terok_clearance
-from terok_clearance import DbusNotifier, Notifier, NullNotifier, create_notifier
+from terok_clearance import create_notifier
+from terok_clearance.notifications.desktop import DbusNotifier
+from terok_clearance.notifications.factory import NullNotifier
+from terok_clearance.notifications.protocol import Notifier
 
 
 class TestPublicApi:
@@ -19,12 +22,10 @@ class TestPublicApi:
             "CLEARANCE_INTERFACE_NAME",
             "COMMANDS",
             "CallbackNotifier",
-            "Clearance1Interface",
             "ClearanceClient",
             "ClearanceEvent",
             "ClearanceHub",
             "CommandDef",
-            "DbusNotifier",
             "EventSubscriber",
             "HUB_UNIT_NAME",
             "InvalidAction",
@@ -36,13 +37,9 @@ class TestPublicApi:
             "NOTIFY_SHIELD_UP",
             "NOTIFY_VERDICT",
             "Notification",
-            "Notifier",
-            "NullNotifier",
             "ShieldCliFailed",
             "UnknownRequest",
-            "VERDICT_ACTIONS",
             "VerdictAction",
-            "VerdictTupleMismatch",
             "check_units_outdated",
             "configure_logging",
             "create_notifier",

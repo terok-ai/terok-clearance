@@ -10,7 +10,9 @@ end without mocks.
 
 import pytest
 
-from terok_clearance import DbusNotifier, Notifier, create_notifier
+from terok_clearance import create_notifier
+from terok_clearance.notifications.desktop import DbusNotifier
+from terok_clearance.notifications.protocol import Notifier
 
 pytestmark = pytest.mark.needs_dbus
 

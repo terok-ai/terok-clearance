@@ -3,7 +3,7 @@
 
 """Tests for the Notifier protocol — structural subtyping checks."""
 
-from terok_clearance.notifications.null import NullNotifier
+from terok_clearance.notifications.factory import NullNotifier
 from terok_clearance.notifications.protocol import Notifier
 
 

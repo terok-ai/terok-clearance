@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from terok_clearance.verdict.shield_exec import run_shield
+from terok_clearance.verdict.server import run_shield
 
 from .conftest import CONTAINER, DOMAIN
 
