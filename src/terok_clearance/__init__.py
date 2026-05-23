@@ -16,11 +16,11 @@ apply:
   firewall console.
 * **Operator UI (consumer) — open.**  Anything that subscribes to
   the hub's varlink stream and implements the
-  [`Notifier`][terok_clearance.Notifier] protocol on the verdict-routing side
-  is a valid UI: today the D-Bus desktop notifier
-  ([`DbusNotifier`][terok_clearance.DbusNotifier]), the standalone Textual
-  ``terok clearance`` app, and the embedded ``terok-tui`` screen all
-  ride on this seam.
+  [`Notifier`][terok_clearance.notifications.protocol.Notifier] protocol on
+  the verdict-routing side is a valid UI: today the D-Bus desktop notifier
+  ([`DbusNotifier`][terok_clearance.notifications.desktop.DbusNotifier]),
+  the standalone Textual ``terok clearance`` app, and the embedded
+  ``terok-tui`` screen all ride on this seam.
 
 Container-runtime inspection is no longer a clearance concern: the
 shield reader resolves the orchestrator-supplied dossier at emit
@@ -34,9 +34,9 @@ Two unrelated wire formats live under this one package as a result:
   ([`ClearanceClient`][terok_clearance.ClearanceClient], [`EventSubscriber`][terok_clearance.EventSubscriber]) that drive the
   per-container block / verdict / lifecycle flow.
 * ``org.freedesktop.Notifications`` over **D-Bus** — the
-  [`DbusNotifier`][terok_clearance.DbusNotifier] wrapper that renders those events as desktop
-  popups.  Kept because that's the OS API; the in-package transport
-  is varlink.
+  [`DbusNotifier`][terok_clearance.notifications.desktop.DbusNotifier]
+  wrapper that renders those events as desktop popups.  Kept because
+  that's the OS API; the in-package transport is varlink.
 """
 
 from terok_util import ArgDef, CommandDef

@@ -82,7 +82,7 @@ async def run_shield(
             stderr=asyncio.subprocess.PIPE,
         )
     except OSError as exc:
-        _log.error("failed to spawn terok-shield: %s", exc)
+        _log.exception("failed to spawn terok-shield")
         return False, f"spawn failed: {exc}"
     try:
         _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=_SHIELD_CLI_TIMEOUT_S)

@@ -17,7 +17,6 @@ five files.
 """
 
 import logging
-from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from dbus_fast import DBusError
@@ -31,36 +30,22 @@ _log = logging.getLogger(__name__)
 class NullNotifier:
     """Silent fallback that satisfies the ``Notifier`` protocol.
 
-    Every method is a no-op. ``notify`` always returns ``0``.
+    Every method is a no-op.  ``notify`` always returns ``0``.  Every
+    method accepts ``**_`` rather than spelling each protocol parameter:
+    the no-op fallback discards every argument and the duck-typed match
+    against [`Notifier`][terok_clearance.notifications.protocol.Notifier]
+    is what matters at call sites, not the impl signature.
     """
 
-    async def notify(
-        self,
-        summary: str,
-        body: str = "",
-        *,
-        actions: Sequence[tuple[str, str]] = (),
-        timeout_ms: int = -1,
-        hints: Mapping[str, Any] | None = None,
-        replaces_id: int = 0,
-        app_icon: str = "",
-        container_id: str = "",
-        container_name: str = "",
-        project: str = "",
-        task_id: str = "",
-        task_name: str = "",
-    ) -> int:
+    async def notify(self, summary: str, body: str = "", **_: Any) -> int:
         """Accept and discard a notification, returning ``0``."""
+        del summary, body
         return 0
 
-    async def on_action(
-        self,
-        notification_id: int,
-        callback: Callable[[str], None],
-    ) -> None:
+    async def on_action(self, *_args: Any, **_kw: Any) -> None:
         """Accept and discard an action callback registration."""
 
-    async def close(self, notification_id: int) -> None:
+    async def close(self, *_args: Any, **_kw: Any) -> None:
         """Accept and discard a close request."""
 
     async def disconnect(self) -> None:
