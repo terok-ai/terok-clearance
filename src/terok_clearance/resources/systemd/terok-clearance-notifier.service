@@ -9,7 +9,7 @@
 # stack.
 #
 # The {{BIN}} placeholder is resolved at install time by
-# terok_clearance.runtime.installer.install_notifier_service so the
+# terok_clearance.runtime.installer.NotifierService.install so the
 # unit works regardless of PATH.
 #
 # Install:

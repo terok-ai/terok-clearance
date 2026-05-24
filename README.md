@@ -63,8 +63,8 @@ surface small and isolated from the bus.
   TUI to render live verdicts)
 - **Three systemd user units** — `terok-clearance-hub.service`,
   `terok-clearance-notifier.service`,
-  `terok-clearance-verdict.service`; installable / removable via
-  `install_notifier_service()` / `uninstall_notifier_service()`
+  `terok-clearance-verdict.service`; installable / removable via the
+  `HubService` and `NotifierService` classmethods
 - **Container metadata helpers** — `IdentityResolver`,
   `ContainerInspector`, `ContainerInfo` for resolving the source
   of a blocked event back to a named task

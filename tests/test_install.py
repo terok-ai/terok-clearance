@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for ``install_service`` — hub + verdict systemd user-unit installer."""
+"""Tests for the hub + verdict systemd user-unit installer ([`HubService`][terok_clearance.runtime.installer.HubService])."""
 
 from __future__ import annotations
 
@@ -15,23 +15,21 @@ from terok_clearance.runtime.installer import (
     HUB_UNIT_NAME,
     NOTIFIER_UNIT_NAME,
     VERDICT_UNIT_NAME,
-    check_units_outdated,
-    install_notifier_service,
-    install_service,
-    read_installed_notifier_unit_version,
-    read_installed_unit_version,
+    HubService,
+    NotifierService,
+    outdated_summary,
 )
 
 
-class TestInstallService:
-    """``install_service`` renders both unit templates into the user systemd dir."""
+class TestHubServiceInstall:
+    """``HubService.install`` renders both unit templates into the user systemd dir."""
 
     def test_writes_both_units_with_bin_path_substituted(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
         with patch.object(_install, "_daemon_reload"):
-            hub, verdict = install_service(Path("/usr/local/bin/terok-clearance-hub"))
+            hub, verdict = HubService.install(Path("/usr/local/bin/terok-clearance-hub"))
         assert hub == tmp_path / "systemd" / "user" / HUB_UNIT_NAME
         assert verdict == tmp_path / "systemd" / "user" / VERDICT_UNIT_NAME
         hub_body = hub.read_text()
@@ -44,15 +42,15 @@ class TestInstallService:
     def test_is_idempotent(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
         with patch.object(_install, "_daemon_reload"):
-            first = install_service(Path("/a/terok-clearance-hub"))
-            second = install_service(Path("/a/terok-clearance-hub"))
+            first = HubService.install(Path("/a/terok-clearance-hub"))
+            second = HubService.install(Path("/a/terok-clearance-hub"))
         assert first[0].read_text() == second[0].read_text()
         assert first[1].read_text() == second[1].read_text()
 
     def test_runs_daemon_reload(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
         with patch.object(_install, "_daemon_reload") as reload:
-            install_service(Path("/a/terok-clearance-hub"))
+            HubService.install(Path("/a/terok-clearance-hub"))
         reload.assert_called_once()
 
     def test_daemon_reload_handles_missing_systemctl(self) -> None:
@@ -63,10 +61,10 @@ class TestInstallService:
     def test_default_argv_renders_python_module_invocation(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Calling ``install_service()`` bare bakes ``python -m terok_clearance.cli.main``."""
+        """Calling ``HubService.install()`` bare bakes ``python -m terok_clearance.cli.main``."""
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
         with patch.object(_install, "_daemon_reload"):
-            hub, verdict = install_service()
+            hub, verdict = HubService.install()
         hub_body = hub.read_text()
         verdict_body = verdict.read_text()
         assert "-m terok_clearance.cli.main serve" in hub_body
@@ -105,11 +103,11 @@ class TestUnitVersion:
     ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
         with patch.object(_install, "_daemon_reload"):
-            install_service(Path("/a/terok-clearance-hub"))
-        assert read_installed_unit_version() == _install._PAIR_UNIT_VERSION
+            HubService.install(Path("/a/terok-clearance-hub"))
+        assert HubService.installed_version() == HubService.UNIT_VERSION
         # Verdict unit carries its own (same version, different marker).
         verdict_text = (tmp_path / "systemd" / "user" / VERDICT_UNIT_NAME).read_text()
-        assert f"# terok-clearance-verdict-version: {_install._PAIR_UNIT_VERSION}" in verdict_text
+        assert f"# terok-clearance-verdict-version: {HubService.UNIT_VERSION}" in verdict_text
 
     def test_read_version_returns_none_without_marker(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -119,7 +117,7 @@ class TestUnitVersion:
         unit_path = tmp_path / "systemd" / "user" / HUB_UNIT_NAME
         unit_path.parent.mkdir(parents=True)
         unit_path.write_text("[Unit]\nDescription=hand-rolled\n[Service]\nExecStart=/x serve\n")
-        assert read_installed_unit_version() is None
+        assert HubService.installed_version() is None
 
     def test_notifier_version_reads_independently_of_hub(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -132,9 +130,9 @@ class TestUnitVersion:
         """
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
         with patch.object(_install, "_daemon_reload"):
-            install_service(Path("/a/terok-clearance-hub"))
-        assert read_installed_unit_version() == _install._PAIR_UNIT_VERSION
-        assert read_installed_notifier_unit_version() is None
+            HubService.install(Path("/a/terok-clearance-hub"))
+        assert HubService.installed_version() == HubService.UNIT_VERSION
+        assert NotifierService.installed_version() is None
 
     def test_notifier_version_reflects_installed_unit(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -142,13 +140,12 @@ class TestUnitVersion:
         """Once the notifier unit lands on disk its version matches the constant."""
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
         with patch.object(_install, "_daemon_reload"):
-            install_notifier_service(Path("/a/terok-clearance-notifier"))
-        assert read_installed_notifier_unit_version() == _install._NOTIFIER_UNIT_VERSION
+            NotifierService.install(Path("/a/terok-clearance-notifier"))
+        assert NotifierService.installed_version() == NotifierService.UNIT_VERSION
         # The notifier unit file is the one that carries this version, not the hub.
         notifier_text = (tmp_path / "systemd" / "user" / NOTIFIER_UNIT_NAME).read_text()
         assert (
-            f"# terok-clearance-notifier-version: {_install._NOTIFIER_UNIT_VERSION}"
-            in notifier_text
+            f"# terok-clearance-notifier-version: {NotifierService.UNIT_VERSION}" in notifier_text
         )
 
     @pytest.mark.parametrize(
@@ -175,42 +172,42 @@ class TestUnitVersion:
             f"{unit_name}: expected line 1 to start with {marker_prefix!r}, got {first_line!r}"
         )
 
-    def test_check_outdated_silent_on_fresh_install(
+    def test_outdated_summary_silent_on_fresh_install(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
         with patch.object(_install, "_daemon_reload"):
-            install_service(Path("/a/terok-clearance-hub"))
-        assert check_units_outdated() is None
+            HubService.install(Path("/a/terok-clearance-hub"))
+        assert outdated_summary() is None
 
-    def test_check_outdated_silent_when_absent(
+    def test_outdated_summary_silent_when_absent(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """No unit installed is headless-host shape, not a drift warning."""
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-        assert check_units_outdated() is None
+        assert outdated_summary() is None
 
-    def test_check_outdated_flags_unversioned_unit(
+    def test_outdated_summary_flags_unversioned_unit(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
         unit_path = tmp_path / "systemd" / "user" / HUB_UNIT_NAME
         unit_path.parent.mkdir(parents=True)
         unit_path.write_text("[Unit]\n[Service]\nExecStart=/x\n")
-        msg = check_units_outdated()
+        msg = outdated_summary()
         assert msg is not None
         assert "unversioned" in msg
         assert "setup" in msg
 
-    def test_check_outdated_flags_half_installed_pair(
+    def test_outdated_summary_flags_half_installed_pair(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Hub present + verdict missing → stale; operator must rerun setup."""
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
         with patch.object(_install, "_daemon_reload"):
-            install_service(Path("/a/terok-clearance-hub"))
+            HubService.install(Path("/a/terok-clearance-hub"))
         (tmp_path / "systemd" / "user" / VERDICT_UNIT_NAME).unlink()
-        msg = check_units_outdated()
+        msg = outdated_summary()
         assert msg is not None
         assert VERDICT_UNIT_NAME in msg
         assert "setup" in msg

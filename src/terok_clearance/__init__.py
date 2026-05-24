@@ -60,12 +60,9 @@ from terok_clearance.notifications.factory import create_notifier
 from terok_clearance.runtime.installer import (
     HUB_UNIT_NAME,
     NOTIFIER_UNIT_NAME,
-    check_units_outdated,
-    install_notifier_service,
-    read_installed_notifier_unit_version,
-    read_installed_unit_version,
-    uninstall_notifier_service,
-    uninstall_service,
+    HubService,
+    NotifierService,
+    outdated_summary,
 )
 from terok_clearance.runtime.service import configure_logging, wait_for_shutdown_signal
 from terok_clearance.wire.errors import InvalidAction, ShieldCliFailed, UnknownRequest
@@ -84,6 +81,7 @@ __all__ = [
     "CommandDef",
     "EventSubscriber",
     "HUB_UNIT_NAME",
+    "HubService",
     "InvalidAction",
     "NOTIFIER_UNIT_NAME",
     "NOTIFY_BLOCKED",
@@ -93,19 +91,15 @@ __all__ = [
     "NOTIFY_SHIELD_UP",
     "NOTIFY_VERDICT",
     "Notification",
+    "NotifierService",
     "ShieldCliFailed",
     "UnknownRequest",
     "VerdictAction",
-    "check_units_outdated",
     "configure_logging",
     "create_notifier",
     "default_clearance_socket_path",
-    "install_notifier_service",
-    "read_installed_notifier_unit_version",
-    "read_installed_unit_version",
+    "outdated_summary",
     "serve",
-    "uninstall_notifier_service",
-    "uninstall_service",
     "wait_for_shutdown_signal",
 ]
 

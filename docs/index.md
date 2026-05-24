@@ -111,7 +111,7 @@ terok-clearance-notify "Title" "Body" --actions allow:Allow deny:Deny --wait
 | `NullNotifier` | No-op fallback (all methods return immediately) |
 | `Notifier` | PEP 544 Protocol for consumer type hints |
 | `ClearanceHub`, `ClearanceClient`, `EventSubscriber` | Varlink hub + subscriber API |
-| `install_notifier_service()`, `uninstall_notifier_service()` | systemd unit lifecycle |
+| `HubService`, `NotifierService` | systemd unit lifecycle (install / uninstall / version probe) |
 
 ## Next steps
 

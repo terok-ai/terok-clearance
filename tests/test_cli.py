@@ -67,7 +67,7 @@ class TestInstallServiceDispatch:
     """Dispatch tests for ``terok-clearance-hub install-service``."""
 
     def test_install_service_calls_install(self, tmp_path, monkeypatch) -> None:
-        """``install-service`` resolves BIN and writes the units via ``install_service``."""
+        """``install-service`` resolves BIN and writes the units via ``HubService.install``."""
         hub_path = tmp_path / "terok-clearance-hub.service"
         verdict_path = tmp_path / "terok-clearance-verdict.service"
 
@@ -76,7 +76,7 @@ class TestInstallServiceDispatch:
             verdict_path.write_text(f"ExecStart={bin_path}\n")
             return hub_path, verdict_path
 
-        monkeypatch.setattr("terok_clearance.runtime.installer.install_service", _fake_install)
+        monkeypatch.setattr("terok_clearance.runtime.installer.HubService.install", _fake_install)
         monkeypatch.setattr("shutil.which", lambda _name: "/opt/terok-clearance")
         with patch("sys.argv", ["terok-clearance", "install-service"]):
             main()
@@ -93,7 +93,7 @@ class TestInstallServiceDispatch:
                 tmp_path / "terok-clearance-verdict.service",
             )
 
-        monkeypatch.setattr("terok_clearance.runtime.installer.install_service", _fake_install)
+        monkeypatch.setattr("terok_clearance.runtime.installer.HubService.install", _fake_install)
         with patch("sys.argv", ["terok-clearance", "install-service", "--bin-path", "/custom/bin"]):
             main()
         assert seen["bin_path"] == "/custom/bin"
@@ -102,9 +102,9 @@ class TestInstallServiceDispatch:
         """``--bin-path ''`` is operator error, not "discover it for me"."""
 
         def _fake_install(bin_path):
-            raise AssertionError("install_service must not be called on empty --bin-path")
+            raise AssertionError("HubService.install must not be called on empty --bin-path")
 
-        monkeypatch.setattr("terok_clearance.runtime.installer.install_service", _fake_install)
+        monkeypatch.setattr("terok_clearance.runtime.installer.HubService.install", _fake_install)
         with (
             patch("sys.argv", ["terok-clearance", "install-service", "--bin-path", ""]),
             pytest.raises(SystemExit),
