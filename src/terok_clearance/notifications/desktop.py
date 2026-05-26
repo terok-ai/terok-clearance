@@ -14,7 +14,9 @@ from typing import Any
 
 from dbus_fast import Message, MessageType
 from dbus_fast.aio import MessageBus
+from dbus_fast.auth import AuthExternal
 from dbus_fast.introspection import Node as _IntrospectionNode
+from terok_util import host_uid
 
 _log = logging.getLogger(__name__)
 
@@ -240,7 +242,11 @@ class DbusNotifier:
             # unreachable.
             if self._conn is not None:
                 return  # type: ignore[unreachable]
-            bus = await MessageBus().connect()
+            # AUTH EXTERNAL: the daemon checks SO_PEERCRED, so the
+            # advertised UID must be the kernel-visible (outer) one.
+            # ``os.geteuid()`` returns inner-userns UID inside a rootless
+            # container hook — mismatch → REJECTED.
+            bus = await MessageBus(auth=AuthExternal(uid=host_uid())).connect()
             try:
                 # Build the proxy from a hand-rolled XML — the
                 # spec-defined shape — instead of a runtime introspect

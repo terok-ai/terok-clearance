@@ -1,15 +1,21 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Shared helpers for the two long-lived asyncio entry points.
+"""Shared helpers for the standalone ``serve()`` entry points.
 
-The hub ([`terok_clearance.serve`][terok_clearance.serve]) and the desktop notifier
-(``terok-clearance-notifier`` in the ``terok`` package) both need the
-same two pieces of systemd-unit plumbing: log to stderr so journald
-picks it up, and block on ``SIGINT`` / ``SIGTERM`` until the operator
-or systemd tears us down.  Keeping both here means one place to
-change if we ever want structured logging or a different shutdown
-signal.
+The hub ([`terok_clearance.serve`][terok_clearance.serve]) and the
+verdict helper ([`terok_clearance.verdict.server.serve`][terok_clearance.verdict.server.serve])
+both expose ``serve()`` coroutines that drive the standalone CLI
+verbs (``terok-clearance serve`` / ``serve-verdict``) used by
+integration tests.  Both need the same two pieces of plumbing: log
+to stderr so the launching process picks it up, and block on
+``SIGINT`` / ``SIGTERM`` until the operator tears them down.
+
+The per-container supervisor in terok-sandbox composes
+[`ClearanceHub`][terok_clearance.ClearanceHub] and
+[`VerdictServer`][terok_clearance.VerdictServer] directly — it owns
+its own lifecycle and signal handling, so it does not go through
+these helpers.
 """
 
 from __future__ import annotations
@@ -21,7 +27,7 @@ import sys
 
 
 def configure_logging(level: int = logging.INFO) -> None:
-    """Send INFO-level logs to stderr so journald / systemd pick them up."""
+    """Send INFO-level logs to stderr so the launching process picks them up."""
     logging.basicConfig(
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         level=level,

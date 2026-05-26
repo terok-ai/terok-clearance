@@ -37,6 +37,13 @@ Two unrelated wire formats live under this one package as a result:
   [`DbusNotifier`][terok_clearance.notifications.desktop.DbusNotifier]
   wrapper that renders those events as desktop popups.  Kept because
   that's the OS API; the in-package transport is varlink.
+
+The supervisor (in terok-sandbox) composes one
+[`ClearanceHub`][terok_clearance.ClearanceHub] and one
+[`VerdictServer`][terok_clearance.VerdictServer] in-process per
+container.  Each container has its own hub socket, so operator UIs
+multiplex across the per-container sockets via
+[`MultiSocketSubscriber`][terok_clearance.MultiSocketSubscriber].
 """
 
 from terok_util import ArgDef, CommandDef
@@ -51,20 +58,16 @@ from terok_clearance.client.subscriber import (
     NOTIFY_SHIELD_UP,
     NOTIFY_VERDICT,
     EventSubscriber,
+    MultiSocketSubscriber,
 )
 from terok_clearance.commands import COMMANDS
 from terok_clearance.domain.events import ClearanceEvent, VerdictAction
 from terok_clearance.hub.server import ClearanceHub, serve
 from terok_clearance.notifications.callback import CallbackNotifier, Notification
 from terok_clearance.notifications.factory import create_notifier
-from terok_clearance.runtime.installer import (
-    HUB_UNIT_NAME,
-    NOTIFIER_UNIT_NAME,
-    HubService,
-    NotifierService,
-    outdated_summary,
-)
-from terok_clearance.runtime.service import configure_logging, wait_for_shutdown_signal
+from terok_clearance.runtime.service import configure_logging
+from terok_clearance.verdict.client import VerdictClient
+from terok_clearance.verdict.server import VerdictServer
 from terok_clearance.wire.errors import InvalidAction, ShieldCliFailed, UnknownRequest
 from terok_clearance.wire.interface import CLEARANCE_INTERFACE_NAME
 from terok_clearance.wire.socket import default_clearance_socket_path
@@ -80,10 +83,8 @@ __all__ = [
     "ClearanceHub",
     "CommandDef",
     "EventSubscriber",
-    "HUB_UNIT_NAME",
-    "HubService",
     "InvalidAction",
-    "NOTIFIER_UNIT_NAME",
+    "MultiSocketSubscriber",
     "NOTIFY_BLOCKED",
     "NOTIFY_CONTAINER_EXITED",
     "NOTIFY_CONTAINER_STARTED",
@@ -91,16 +92,15 @@ __all__ = [
     "NOTIFY_SHIELD_UP",
     "NOTIFY_VERDICT",
     "Notification",
-    "NotifierService",
     "ShieldCliFailed",
     "UnknownRequest",
     "VerdictAction",
+    "VerdictClient",
+    "VerdictServer",
     "configure_logging",
     "create_notifier",
     "default_clearance_socket_path",
-    "outdated_summary",
     "serve",
-    "wait_for_shutdown_signal",
 ]
 
 __version__ = "0.0.0"
