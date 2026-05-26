@@ -172,26 +172,6 @@ path = "terok_clearance.runtime.service"
 layer = "infrastructure"
 depends_on = []
 
-[[modules]]
-path = "terok_clearance.runtime.installer"
-layer = "infrastructure"
-depends_on = []
-
-# Notifier daemon — subscribes to the hub, renders desktop popups.
-# Separate feature dir so its lifecycle is isolated from the hub/verdict
-# pair; installed by the runtime installer but runs in its own systemd
-# unit with its own crash radius.  Identity arrives in the per-event
-# dossier (resolved by the shield reader at emit time), so the daemon
-# carries no inspector wiring of its own.
-[[modules]]
-path = "terok_clearance.notifier.app"
-layer = "infrastructure"
-depends_on = [
-    "terok_clearance.client.subscriber",
-    "terok_clearance.notifications.factory",
-    "terok_clearance.runtime.service",
-]
-
 
 # ── Interface layer ─────────────────────────────────────────────────
 

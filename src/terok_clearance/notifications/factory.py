@@ -19,7 +19,7 @@ five files.
 import logging
 from typing import Any
 
-from dbus_fast import DBusError
+from dbus_fast.errors import DBusFastError
 
 from terok_clearance.notifications.desktop import DbusNotifier
 from terok_clearance.notifications.protocol import Notifier
@@ -64,7 +64,7 @@ async def create_notifier(app_name: str = "terok") -> Notifier:
     notifier = DbusNotifier(app_name)
     try:
         await notifier.connect()
-    except (OSError, DBusError, ValueError) as exc:
+    except (OSError, DBusFastError, ValueError) as exc:
         _log.debug("D-Bus session bus unavailable, falling back to NullNotifier: %s", exc)
         return NullNotifier()
     return notifier

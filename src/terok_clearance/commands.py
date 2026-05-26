@@ -41,47 +41,13 @@ async def _handle_serve() -> None:
 async def _handle_serve_verdict() -> None:
     """Run the verdict-helper service until SIGINT/SIGTERM.
 
-    Separate systemd unit from the hub — the helper execs
-    ``terok-shield allow|deny`` (and transitively ``podman unshare``)
-    which is incompatible with the seccomp + mount-ns hardening the
-    hub unit now carries.
+    Standalone entry point for integration tests; production deploys
+    compose the hub + verdict pair in-process via the per-container
+    supervisor in terok-sandbox.
     """
     from terok_clearance.verdict.server import serve
 
     await serve()
-
-
-async def _handle_install_service(*, bin_path: str | None = None) -> None:  # NOSONAR S7503
-    """Install the terok-clearance systemd user unit and reload the user daemon.
-
-    ``async`` is structural, not semantic: every CommandDef.handler goes
-    through ``asyncio.run(handler(**kwargs))`` in ``cli.main``.  Sonar's
-    "async without await" rule is correct about the body but the shape
-    is required by the dispatcher contract — removing ``async`` breaks
-    every other handler's calling convention.
-    """
-    import shutil
-    from pathlib import Path as _Path
-
-    from terok_clearance.runtime.installer import HubService
-
-    if bin_path is not None and not bin_path:
-        raise SystemExit("install-service: --bin-path cannot be empty")
-    discovered = bin_path or shutil.which("terok-clearance-hub")
-    # ``HubService.install(None)`` falls through to ``python -m terok_clearance.cli.main``
-    # — no need to spell the argv here when the service class owns the default.
-    resolved = _Path(discovered) if discovered is not None else None
-    hub_path, verdict_path = HubService.install(resolved)
-    print(f"Installed {hub_path}")  # noqa: T201
-    print(f"Installed {verdict_path}")  # noqa: T201
-    # ``enable --now`` is a no-op on an already-active unit, so an in-place
-    # rewrite (pipx upgrade, unit-version bump) needs the explicit restart
-    # to actually replace the running process — same gotcha that bit the
-    # sandbox gate primitive (terok-sandbox#239).  Print both verbs so a
-    # first-time install and an upgrade reach for the same recipe.
-    units = " ".join(HubService.UNIT_NAMES)
-    print(f"Enable with:  systemctl --user enable --now {units}")  # noqa: T201
-    print(f"Restart with: systemctl --user restart {units}")  # noqa: T201
 
 
 # ── Clearance handler ────────────────────────────────────
@@ -122,18 +88,6 @@ COMMANDS: tuple[CommandDef, ...] = (
         name="serve-verdict",
         help="Run the verdict helper (serves org.terok.ClearanceVerdict1 for shield exec)",
         handler=_handle_serve_verdict,
-    ),
-    CommandDef(
-        name="install-service",
-        help="Install the terok-clearance systemd user unit (systemctl --user daemon-reload'd)",
-        handler=_handle_install_service,
-        args=(
-            ArgDef(
-                name="--bin-path",
-                dest="bin_path",
-                help="Override the resolved terok-clearance-hub launcher path",
-            ),
-        ),
     ),
     CommandDef(
         name="clearance",
