@@ -3,9 +3,10 @@
 
 """Plain-terminal interactive clearance tool.
 
-Subscribes to Shield1/Clearance1 D-Bus signals and presents blocked
-connections in a simple numbered-prompt format.  The operator types
-``a <N>`` (allow) or ``d <N>`` (deny) to send verdicts.
+Subscribes to every per-container clearance hub socket via
+[`MultiSocketSubscriber`][terok_clearance.MultiSocketSubscriber] and
+presents blocked connections in a simple numbered-prompt format.  The
+operator types ``a <N>`` (allow) or ``d <N>`` (deny) to send verdicts.
 
 No Textual or curses dependency — works over any terminal, SSH, or
 serial console.
@@ -107,17 +108,17 @@ class _TerminalClearance:
         self._notifier.invoke_action(nid, action)
 
     async def run(self) -> None:
-        """Connect to the clearance hub and run the interactive loop."""
-        from terok_clearance.client.subscriber import EventSubscriber
+        """Connect to every per-container clearance hub and run the interactive loop."""
+        from terok_clearance.client.subscriber import MultiSocketSubscriber
 
-        subscriber = EventSubscriber(self._notifier)
+        subscriber = MultiSocketSubscriber(self._notifier)
         try:
             await subscriber.start()
         except Exception as exc:
             print(f"clearance hub unavailable: {exc}", file=sys.stderr)  # noqa: T201
             sys.exit(1)
 
-        print("Shield clearance — listening on session bus")  # noqa: T201
+        print("Shield clearance — listening on per-container sockets")  # noqa: T201
         print("Commands: a <N> allow, d <N> deny, l list, q quit\n")  # noqa: T201
 
         self._stop = asyncio.Event()

@@ -14,6 +14,7 @@ import contextlib
 import os
 import stat
 from collections.abc import Callable
+from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Any
 
@@ -62,7 +63,13 @@ def ensure_private_parent(path: Path, label: str) -> None:
         )
 
 
-async def bind_hardened(factory: Callable[[str], Any], path: Path, label: str) -> Any:  # noqa: ANN401 — returns whatever the factory gave us
+async def bind_hardened(  # noqa: ANN401 — returns whatever the factory gave us
+    factory: Callable[[str], Any],
+    path: Path,
+    label: str,
+    *,
+    socket_context: Callable[[], AbstractContextManager[None]] | None = None,
+) -> Any:
     """Bind a unix-socket server via *factory* with the full hardening ritual.
 
     Verifies the parent, unlinks any stale socket path, sets umask
@@ -70,13 +77,27 @@ async def bind_hardened(factory: Callable[[str], Any], path: Path, label: str) -
     confirms the path is a socket afterwards.  *factory* is awaited
     with the socket path as its sole argument and must return the
     server object.
+
+    *socket_context* — optional zero-arg callable returning a context
+    manager that's entered around the ``await factory(...)`` call.
+    Lets a caller install a per-thread socket-creation context (e.g.
+    SELinux ``setsockcreatecon`` so containers may ``connectto`` the
+    bound socket) without making this package aware of the labelling
+    mechanism.  Default ``None`` — no-op wrapper, same behaviour as
+    before.
     """
     ensure_private_parent(path, label)
     with contextlib.suppress(FileNotFoundError):
         path.unlink()
+    # ``socket_context()`` is called *inside* the try-finally — if its
+    # construction raises, the umask must still be restored.
     old_umask = os.umask(_BIND_UMASK)
     try:
-        server = await factory(str(path))
+        ctx: AbstractContextManager[None] = (
+            socket_context() if socket_context is not None else contextlib.nullcontext()
+        )
+        with ctx:
+            server = await factory(str(path))
     finally:
         os.umask(old_umask)
     lst = os.lstat(path)

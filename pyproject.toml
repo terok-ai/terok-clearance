@@ -20,7 +20,7 @@ dependencies = [
     "dbus-fast>=4.3.0,<5.0",
     "asyncvarlink>=0.3.1,<0.4.0",
     "pyyaml>=6.0",
-    "terok-util @ https://github.com/terok-ai/terok-util/releases/download/v0.0.2a1/terok_util-0.0.2a1-py3-none-any.whl",
+    "terok-util @ git+https://github.com/sliwowitz/terok-util.git@feat/per-container-supervisor",
 ]
 
 [project.urls]
@@ -33,7 +33,6 @@ Security = "https://github.com/terok-ai/terok-clearance/security/policy"
 
 [project.scripts]
 terok-clearance-hub = "terok_clearance.cli.main:main"
-terok-clearance-notifier = "terok_clearance.notifier.app:main"
 
 [tool.poetry]
 classifiers = [

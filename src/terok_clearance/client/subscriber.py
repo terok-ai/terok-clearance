@@ -15,7 +15,10 @@ and ships it on every event, so the renderer just reads it.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import glob
 import logging
+import os
 from collections.abc import Coroutine, Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -624,3 +627,194 @@ class EventSubscriber:
             hook(*args)
         except Exception:
             _log.exception("Notifier %s raised for args=%s", method, args)
+
+
+# ── Multi-socket fan-in subscriber ────────────────────────────────────
+
+
+def _default_socket_glob() -> str:
+    """Return the canonical per-container hub-socket glob.
+
+    Resolves ``$XDG_RUNTIME_DIR`` (falling back to ``/run/user/<uid>``)
+    and appends the per-container supervisor layout ``terok/clearance/*.sock``.
+    Kept module-local because every call site that needs the default
+    today is in this file; promoting it to `terok_clearance.wire.socket`
+    would force a wire-layer dependency on the subscriber's runtime
+    discovery shape.
+    """
+    xdg = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+    return str(Path(xdg) / "terok" / "clearance" / "*.sock")
+
+
+class MultiSocketSubscriber:
+    """Subscribe to every per-container clearance hub socket under a glob.
+
+    The per-container-supervisor model gives every container its own
+    hub socket at ``$XDG_RUNTIME_DIR/terok/clearance/<container_id>.sock``,
+    so an operator UI that wants the union of every supervisor's
+    event stream must multiplex across the set.  This class watches
+    *socket_glob* (default
+    ``$XDG_RUNTIME_DIR/terok/clearance/*.sock``), opens an
+    [`EventSubscriber`][terok_clearance.EventSubscriber] against each
+    matching path on [`start`][terok_clearance.client.subscriber.MultiSocketSubscriber.start],
+    re-scans every *rescan_interval_s* seconds to pick up sockets that
+    appeared after start, and tears down child subscribers whose
+    sockets vanish.  All events fan into the same *notifier*.
+
+    A simple poll loop drives the rescan — no inotify dependency.  The
+    overhead is one ``glob.glob`` call per interval, which is cheap
+    compared to the cost of carrying a fanotify watch fd for what is
+    effectively a directory that mutates only at container start /
+    stop.
+
+    Args:
+        notifier: Desktop notification backend (any ``Notifier`` works).
+            All child subscribers fan their events into this single
+            notifier so the operator sees one merged stream.
+        socket_glob: Filesystem glob of clearance hub sockets to track.
+            ``None`` (the default) derives
+            ``$XDG_RUNTIME_DIR/terok/clearance/*.sock`` from the
+            current runtime dir.
+        enabled_categories: Subset of
+            [`ALL_NOTIFY_CATEGORIES`][terok_clearance.client.subscriber.ALL_NOTIFY_CATEGORIES]
+            propagated to every child [`EventSubscriber`][terok_clearance.EventSubscriber].
+            ``None`` enables every category.
+        rescan_interval_s: Seconds between glob rescans.  The default
+            (2.0) balances startup latency for a freshly-spawned
+            supervisor against background polling cost when the host
+            is idle.
+    """
+
+    def __init__(
+        self,
+        notifier: Notifier,
+        *,
+        socket_glob: str | None = None,
+        enabled_categories: AbstractSet[str] | None = None,
+        rescan_interval_s: float = 2.0,
+    ) -> None:
+        """Capture *notifier* + scan parameters; sockets are discovered in `start`."""
+        self._notifier = notifier
+        self._socket_glob = socket_glob or _default_socket_glob()
+        self._enabled_categories: frozenset[str] | None = (
+            None if enabled_categories is None else frozenset(enabled_categories)
+        )
+        self._rescan_interval_s = rescan_interval_s
+        self._subscribers: dict[str, EventSubscriber] = {}
+        self._rescan_task: asyncio.Task[None] | None = None
+        self._stopping = False
+
+    # ── Lifecycle ─────────────────────────────────────────────────────
+
+    async def start(self) -> None:
+        """Connect to every currently-matching socket and start the rescan loop.
+
+        Sockets that fail to connect at start are logged and skipped —
+        a flaky supervisor doesn't stop the rest from coming online.
+        The rescan loop runs as a background task so newly-spawned
+        supervisors join the merged stream without a manual restart.
+
+        Idempotent: a second ``start()`` while the rescan loop is still
+        live is a no-op (the alternative would orphan the existing task
+        and leak a loop that keeps reconciling).
+        """
+        if self._rescan_task is not None and not self._rescan_task.done():
+            return
+        self._stopping = False
+        await self._reconcile()
+        self._rescan_task = asyncio.create_task(self._rescan_loop())
+        _log.info(
+            "multi-socket subscriber online (glob=%s, %d socket(s))",
+            self._socket_glob,
+            len(self._subscribers),
+        )
+
+    async def stop(self) -> None:
+        """Cancel the rescan loop and stop every child subscriber.
+
+        Stops are awaited in parallel because each child holds its own
+        transports — serialising would extend shutdown latency by the
+        sum of every disconnect timeout instead of the worst-case one.
+        """
+        self._stopping = True
+        if self._rescan_task is not None:
+            self._rescan_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await self._rescan_task
+            self._rescan_task = None
+        children = list(self._subscribers.values())
+        self._subscribers.clear()
+        if children:
+            await asyncio.gather(*(child.stop() for child in children), return_exceptions=True)
+
+    # ── Reconciliation ────────────────────────────────────────────────
+
+    async def _rescan_loop(self) -> None:
+        """Re-glob and reconcile until `stop` flips the stop flag.
+
+        ``_stopping`` is set by `stop` from another task, so the
+        early-return guard isn't actually unreachable — mypy can't
+        see the cross-task mutation.
+        """
+        try:
+            while not self._stopping:
+                await asyncio.sleep(self._rescan_interval_s)
+                if self._stopping:
+                    return  # type: ignore[unreachable]
+                await self._reconcile()
+        except asyncio.CancelledError:
+            raise
+
+    async def _reconcile(self) -> None:
+        """Bring the live subscriber set in line with the current glob.
+
+        New paths get a fresh [`EventSubscriber`][terok_clearance.EventSubscriber]
+        started in parallel; disappeared paths get their child
+        subscribers stopped in parallel.  Failures on either side are
+        logged and skipped so one broken socket doesn't stall the
+        reconcile cycle.
+        """
+        current = set(glob.glob(self._socket_glob))
+        existing = set(self._subscribers.keys())
+        to_add = current - existing
+        to_remove = existing - current
+
+        if to_add:
+            await asyncio.gather(
+                *(self._add_socket(path) for path in to_add), return_exceptions=True
+            )
+        if to_remove:
+            await asyncio.gather(
+                *(self._remove_socket(path) for path in to_remove),
+                return_exceptions=True,
+            )
+
+    async def _add_socket(self, path: str) -> None:
+        """Open and start an `EventSubscriber` for *path*; log and skip on failure."""
+        if path in self._subscribers:
+            return
+        subscriber = EventSubscriber(
+            self._notifier,
+            socket_path=Path(path),
+            enabled_categories=self._enabled_categories,
+        )
+        try:
+            await subscriber.start()
+        except Exception:
+            _log.exception("Failed to subscribe to %s; skipping", path)
+            with contextlib.suppress(Exception):
+                await subscriber.stop()
+            return
+        self._subscribers[path] = subscriber
+        _log.info("subscribed to clearance hub %s", path)
+
+    async def _remove_socket(self, path: str) -> None:
+        """Stop the child subscriber for *path* and forget it; log and skip on failure."""
+        subscriber = self._subscribers.pop(path, None)
+        if subscriber is None:
+            return
+        try:
+            await subscriber.stop()
+        except Exception:
+            _log.exception("Failed to stop subscriber for %s", path)
+        _log.info("unsubscribed from clearance hub %s", path)
