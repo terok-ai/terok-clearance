@@ -53,7 +53,7 @@ packages = [
 version = "0.6.14a7"
 
 [tool.poetry.group.dev.dependencies]
-ruff = ">=0.15.14"
+ruff = ">=0.15.15"
 pre-commit = ">=4.0"
 bandit = ">=1.7"
 docstr-coverage = "^2.3.2"
@@ -66,7 +66,7 @@ mypy = ">=2.1.0,<3.0"
 [tool.poetry.group.test.dependencies]
 pytest = ">=9.0.3"
 pytest-cov = ">=4.0"
-pytest-asyncio = ">=0.21.0"
+pytest-asyncio = ">=1.4.0"
 python-dbusmock = ">=0.32"
 
 [tool.poetry.group.docs.dependencies]
