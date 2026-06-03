@@ -3,12 +3,11 @@
 
 """The verdict helper — a minimal varlink server wrapping ``terok-shield``.
 
-One process, one socket, one method (``Apply``).  Runs as its own
-systemd user unit (``terok-clearance-verdict.service``) so the
-companion hub unit can take full seccomp + mount-ns hardening without
-tripping the kernel's NNP requirement and SELinux's denial of the
-``unconfined_t → container_runtime_t`` transition that rootless podman
-needs every time shield exec's ``podman unshare nsenter nft``.
+One process, one socket, one method (``Apply``).  In the
+per-container-supervisor model the helper runs inside the
+[`Sandbox`][terok_sandbox.Sandbox] supervisor alongside the hub, on a
+per-container socket; the standalone ``terok-clearance serve-verdict``
+entry point is kept for integration testing.
 
 Stateless: no authz decisions, no request-id binding, no fan-out.
 The hub already validated the verdict triple before forwarding; the
@@ -24,6 +23,8 @@ import logging
 import os
 import shutil
 import sys
+from collections.abc import Callable
+from contextlib import AbstractContextManager
 from pathlib import Path
 
 from asyncvarlink import VarlinkInterfaceRegistry, VarlinkUnixServer, create_unix_server
@@ -40,12 +41,12 @@ _log = logging.getLogger(__name__)
 #
 # The exec path lives here because the verdict helper process is the
 # only thing that ever calls it — and the one thing the hub *cannot*
-# do under any real systemd hardening.  ``podman unshare nsenter nft``
-# (which shield exec's under the covers) requires the hub's user+mount
-# namespace to match the pause process's, and any seccomp-based or
-# mount-ns-isolating unit directive breaks that setns.  The verdict
-# helper runs unhardened; the hub, freed from this exec, runs under
-# ``NoNewPrivileges=yes`` + ``@system-service``.
+# do under process-level hardening.  ``podman unshare nsenter nft``
+# (which shield exec's under the covers) requires the caller's
+# user+mount namespace to match the pause process's, and any
+# seccomp-based or mount-ns-isolating sandbox breaks that setns.  The
+# verdict helper runs unhardened; the hub, freed from this exec, can
+# be hardened independently.
 
 #: Upper bound on a single ``terok-shield allow|deny`` invocation.  Shield
 #: holds an nft lock and can also block on a slow podman pause; clients
@@ -130,10 +131,19 @@ class VerdictServer:
         *,
         socket_path: Path | None = None,
         shield_binary: str | None = None,
+        socket_context: Callable[[], AbstractContextManager[None]] | None = None,
     ) -> None:
-        """Configure the socket + shield executable path."""
+        """Configure the socket + shield executable path.
+
+        *socket_context* — see
+        [`ClearanceHub.__init__`][terok_clearance.hub.server.ClearanceHub.__init__];
+        forwarded to
+        [`bind_hardened`][terok_clearance.wire.socket.bind_hardened] so
+        the verdict socket can carry a custom SELinux type.
+        """
         self._socket_path = socket_path or default_verdict_socket_path()
         self._shield_binary = shield_binary or find_shield_binary()
+        self._socket_context = socket_context
         self._server: VarlinkUnixServer | None = None
 
     async def start(self) -> None:
@@ -153,7 +163,12 @@ class VerdictServer:
         async def _factory(path: str) -> object:
             return await create_unix_server(registry.protocol_factory, path=path)
 
-        self._server = await bind_hardened(_factory, self._socket_path, "verdict")
+        self._server = await bind_hardened(
+            _factory,
+            self._socket_path,
+            "verdict",
+            socket_context=self._socket_context,
+        )
         _log.info("verdict helper online at %s", self._socket_path)
 
     async def stop(self) -> None:

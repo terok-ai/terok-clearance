@@ -256,7 +256,8 @@ class TestRunLifecycle:
 
         with (
             patch(
-                "terok_clearance.client.subscriber.EventSubscriber", return_value=mock_subscriber
+                "terok_clearance.client.subscriber.MultiSocketSubscriber",
+                return_value=mock_subscriber,
             ),
             patch.object(sys, "stdin", fake_stdin),
         ):
@@ -265,7 +266,7 @@ class TestRunLifecycle:
         mock_subscriber.start.assert_awaited_once()
         mock_subscriber.stop.assert_awaited_once()
         out = capsys.readouterr().out
-        assert "listening" in out.lower()
+        assert "per-container" in out.lower()
 
     async def test_run_exits_on_eof(self, capsys) -> None:
         """run() completes when stdin hits EOF."""
@@ -276,7 +277,8 @@ class TestRunLifecycle:
 
         with (
             patch(
-                "terok_clearance.client.subscriber.EventSubscriber", return_value=mock_subscriber
+                "terok_clearance.client.subscriber.MultiSocketSubscriber",
+                return_value=mock_subscriber,
             ),
             patch.object(sys, "stdin", fake_stdin),
         ):
@@ -292,7 +294,8 @@ class TestRunLifecycle:
 
         with (
             patch(
-                "terok_clearance.client.subscriber.EventSubscriber", return_value=mock_subscriber
+                "terok_clearance.client.subscriber.MultiSocketSubscriber",
+                return_value=mock_subscriber,
             ),
             pytest.raises(SystemExit) as exc_info,
         ):
@@ -308,7 +311,8 @@ class TestRunLifecycle:
 
         with (
             patch(
-                "terok_clearance.client.subscriber.EventSubscriber", return_value=mock_subscriber
+                "terok_clearance.client.subscriber.MultiSocketSubscriber",
+                return_value=mock_subscriber,
             ),
             patch.object(sys, "stdin", fake_stdin),
         ):

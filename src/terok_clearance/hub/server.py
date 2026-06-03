@@ -23,7 +23,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractContextManager
 from pathlib import Path
 
 from asyncvarlink import VarlinkInterfaceRegistry, VarlinkUnixServer, create_unix_server
@@ -91,6 +92,7 @@ class ClearanceHub:
         clearance_socket: Path | None = None,
         reader_socket: Path | None = None,
         verdict_client: VerdictClient | None = None,
+        socket_context: Callable[[], AbstractContextManager[None]] | None = None,
     ) -> None:
         """Configure the two sockets and the verdict-helper client.
 
@@ -98,10 +100,18 @@ class ClearanceHub:
         without spawning the helper process.  Production callers leave
         it defaulted — a fresh [`VerdictClient`][terok_clearance.hub.server.VerdictClient] pointing at the
         canonical helper socket.
+
+        *socket_context* — optional zero-arg callable returning a context
+        manager around the varlink ``bind()`` (forwarded to
+        [`bind_hardened`][terok_clearance.wire.socket.bind_hardened]).
+        terok-sandbox passes its SELinux ``setsockcreatecon`` helper here
+        so the hub socket is labelled ``terok_socket_t`` and confined
+        containers can ``connectto`` it.
         """
         self._clearance_socket = clearance_socket or default_clearance_socket_path()
         self._reader_socket = reader_socket  # None → EventIngester picks its default.
         self._verdict_client = verdict_client or VerdictClient()
+        self._socket_context = socket_context
 
         self._subscribers: set[asyncio.Queue[ClearanceEvent]] = set()
         # request_id → (container, dest) the hub emitted in the matching
@@ -150,7 +160,10 @@ class ClearanceHub:
                 return await create_unix_server(registry.protocol_factory, path=path)
 
             self._varlink_server = await bind_hardened(
-                _factory, self._clearance_socket, "clearance"
+                _factory,
+                self._clearance_socket,
+                "clearance",
+                socket_context=self._socket_context,
             )
         except BaseException:
             with contextlib.suppress(Exception):
@@ -416,8 +429,9 @@ async def serve() -> None:  # pragma: no cover — integration path
     """Run the hub service until SIGINT/SIGTERM.
 
     The entry point ``terok-clearance serve`` hands off here.  Blocks forever
-    on a signal-set [`asyncio.Event`][asyncio.Event]; systemd's SIGTERM flips it,
-    then [`stop`][terok_clearance.hub.server.ClearanceHub.stop] tears down the server under a timeout.
+    on a signal-set [`asyncio.Event`][asyncio.Event]; the first SIGINT/SIGTERM
+    flips it, then [`stop`][terok_clearance.hub.server.ClearanceHub.stop]
+    tears down the server under a timeout.
     """
     from terok_clearance.runtime.service import configure_logging, wait_for_shutdown_signal
 

@@ -1,7 +1,7 @@
 # terok-clearance
 
-Live allow/deny prompts for the terok firewall — desktop
-notifications, varlink hub, verdict daemon.
+Live allow/deny prompts for the terok firewall — a per-container
+varlink hub and verdict helper, fanned into desktop notifications.
 
 When a hardened terok container hits a blocked outbound destination,
 the operator sees a desktop notification with **Allow** and **Deny**
@@ -14,39 +14,46 @@ the container, no editing config files.
 ## What is the clearance system
 
 The clearance system is the operator-in-the-loop decision path for
-terok's egress firewall.  It is built from three small daemons that
-talk over a varlink Unix socket and surface decisions through the
+terok's egress firewall.  Each hardened container runs its own
+**supervisor** (provided by terok-sandbox) that composes two
+varlink components in-process — the **hub** (event bus) and the
+**verdict helper** (the `terok-shield allow|deny` exec path) — on a
+per-container Unix socket.  Operator UIs fan every supervisor's
+event stream into one place and surface decisions through the
 freedesktop Notifications D-Bus interface:
 
 ```mermaid
 sequenceDiagram
     participant C as Container
     participant S as terok-shield<br/>(nftables)
-    participant H as clearance-hub
-    participant N as clearance-notifier
+    participant Sup as per-container supervisor<br/>(hub + verdict helper)
+    participant Sub as MultiSocketSubscriber<br/>(fan-in)
     participant U as Operator (desktop)
-    participant V as clearance-verdict
 
     C->>S: outbound packet to api.example.com
     S-->>C: REJECT (default-deny)
-    S->>H: blocked-connection event<br/>(NFLOG → varlink)
-    H->>N: ClearanceEvent: connection_blocked
-    N->>U: desktop notification<br/>"Allow api.example.com?"
-    U->>N: clicks "Allow"
-    N->>H: SendVerdict(allow)
-    H->>V: ApplyVerdict(allow, dest)
-    V->>S: terok-shield allow api.example.com
+    S->>Sup: blocked-connection event<br/>(NFLOG → hub)
+    Sup->>Sub: ClearanceEvent: connection_blocked
+    Sub->>U: desktop notification<br/>"Allow api.example.com?"
+    U->>Sub: clicks "Allow"
+    Sub->>Sup: SendVerdict(allow)
+    Sup->>S: verdict helper execs<br/>terok-shield allow api.example.com
     S-->>S: nft add element …
     S-->>C: subsequent packets pass
 ```
 
-The split into three units is deliberate.  The **hub** is the
-event bus and the only daemon with persistent state; it runs
-hardened.  The **notifier** is a thin desktop bridge that fails
-gracefully on headless hosts.  The **verdict** daemon is the only
-piece that calls into the container's network namespace, so it is
-intentionally less constrained — keeping the privileged surface
-small and isolated from the bus.
+The per-container layout is deliberate.  Each supervisor owns one
+container's hub and verdict helper, so a container's lifecycle,
+sockets, and privileged exec surface stay isolated from every other
+container.  Within a supervisor the **hub** is the event bus and the
+only component with persistent state; it runs hardened.  The
+**verdict helper** is the only piece that execs into the container's
+shield, so it is held to one stateless method and isolated from the
+receive path.  On the operator side, a single **notifier** is a thin
+desktop bridge that fails gracefully on headless hosts, and
+[`MultiSocketSubscriber`][terok_clearance.MultiSocketSubscriber]
+multiplexes across every per-container hub socket so the operator
+sees one merged stream.
 
 ## Key properties
 
@@ -111,7 +118,8 @@ terok-clearance-notify "Title" "Body" --actions allow:Allow deny:Deny --wait
 | `NullNotifier` | No-op fallback (all methods return immediately) |
 | `Notifier` | PEP 544 Protocol for consumer type hints |
 | `ClearanceHub`, `ClearanceClient`, `EventSubscriber` | Varlink hub + subscriber API |
-| `HubService`, `NotifierService` | systemd unit lifecycle (install / uninstall / version probe) |
+| `MultiSocketSubscriber` | Fan-in subscriber across every per-container hub socket |
+| `VerdictServer` | Embeddable verdict-helper varlink server (composed by the supervisor) |
 
 ## Next steps
 

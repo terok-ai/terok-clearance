@@ -20,39 +20,38 @@ the container, no editing config files.
 ## What is the clearance system
 
 The clearance system is the operator-in-the-loop decision path for
-terok's egress firewall.  It is built from three small daemons that
-talk over a varlink Unix socket and surface decisions through the
-freedesktop Notifications D-Bus interface:
+terok's egress firewall.  It is built from a hub and verdict pair
+that talk over a varlink Unix socket and surface decisions through
+the freedesktop Notifications D-Bus interface:
 
 ```mermaid
 sequenceDiagram
     participant C as Container
     participant S as terok-shield<br/>(nftables)
     participant H as clearance-hub
-    participant N as clearance-notifier
     participant U as Operator (desktop)
     participant V as clearance-verdict
 
     C->>S: outbound packet to api.example.com
     S-->>C: REJECT (default-deny)
     S->>H: blocked-connection event<br/>(NFLOG → varlink)
-    H->>N: ClearanceEvent: connection_blocked
-    N->>U: desktop notification<br/>"Allow api.example.com?"
-    U->>N: clicks "Allow"
-    N->>H: SendVerdict(allow)
+    H->>U: desktop notification<br/>"Allow api.example.com?"
+    U->>H: clicks "Allow"
     H->>V: ApplyVerdict(allow, dest)
     V->>S: terok-shield allow api.example.com
     S-->>S: nft add element …
     S-->>C: subsequent packets pass
 ```
 
-The split into three units is deliberate.  The **hub** is the
-event bus and is the only daemon that needs persistent state; it
-runs hardened.  The **notifier** is a thin desktop bridge that
-fails gracefully on headless hosts.  The **verdict** daemon is the
-only piece that calls into the container's network namespace, so
-it is intentionally less constrained — keeping the privileged
-surface small and isolated from the bus.
+The hub and the verdict server are composed in-process by the
+per-container supervisor that ``terok-sandbox``'s OCI hook spawns —
+one supervisor (and therefore one hub socket) per container.  The
+hub fans events out to whichever operator UIs are subscribed (the
+plain-terminal `terok-clearance` tool, the embedded `terok-tui`
+screen, a `DbusNotifier` listening on the session bus).  The
+verdict server is the only piece that calls into the container's
+network namespace, so it sits behind the hub's authz boundary and
+keeps the privileged surface small.
 
 ## What it provides
 
@@ -61,13 +60,11 @@ surface small and isolated from the bus.
 - **Varlink hub** — `ClearanceHub`, `ClearanceClient`,
   `EventSubscriber` for in-process subscribers (used by the
   TUI to render live verdicts)
-- **Three systemd user units** — `terok-clearance-hub.service`,
-  `terok-clearance-notifier.service`,
-  `terok-clearance-verdict.service`; installable / removable via the
-  `HubService` and `NotifierService` classmethods
-- **Container metadata helpers** — `IdentityResolver`,
-  `ContainerInspector`, `ContainerInfo` for resolving the source
-  of a blocked event back to a named task
+- **Multi-socket subscriber** — `MultiSocketSubscriber` multiplexes
+  every per-container hub socket under `$XDG_RUNTIME_DIR/terok/clearance/`
+  so a single UI sees the union of every supervisor's event stream
+- **Embeddable verdict server** — `VerdictServer` for the
+  per-container supervisor to compose alongside the hub
 - **Graceful degradation** — `NullNotifier` is returned when no
   D-Bus session bus is available, so headless hosts can still run
   the rest of the stack
@@ -76,14 +73,15 @@ surface small and isolated from the bus.
 
 terok-clearance is the user-in-the-loop side-rail of the terok
 ecosystem.  Above it,
-[terok](https://github.com/terok-ai/terok)'s TUI subscribes to the
-hub to display verdicts in-band; on a desktop session the
-freedesktop notifier surfaces the same events as popups.  Below it,
-the verdict daemon reaches into
+[terok](https://github.com/terok-ai/terok)'s TUI subscribes to every
+per-container hub socket to display verdicts in-band; on a desktop
+session the same events fire freedesktop popups.  Below it, the
+verdict server reaches into
 [terok-shield](https://github.com/terok-ai/terok-shield) to mutate
-the running ruleset.  Installation and lifecycle are owned by
-[terok-sandbox](https://github.com/terok-ai/terok-sandbox), which
-wires the three units up at setup time.
+the running ruleset.  Lifecycle is owned by
+[terok-sandbox](https://github.com/terok-ai/terok-sandbox)'s
+per-container supervisor, which composes the hub and verdict server
+in-process for every container it watches.
 
 The package is genuinely usable on its own — the notification API
 and the protocol abstractions are stable enough to sit at the heart
