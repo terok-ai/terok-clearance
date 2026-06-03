@@ -4,14 +4,12 @@
 [![REUSE status](https://api.reuse.software/badge/github.com/terok-ai/terok-clearance)](https://api.reuse.software/info/github.com/terok-ai/terok-clearance)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=terok-ai_terok-clearance&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=terok-ai_terok-clearance)
 
-Live allow/deny prompts for the terok firewall — desktop
+Live allow/deny prompts for the [terok-shield](https://github.com/terok-ai/terok-shield) firewall — desktop
 notifications, varlink hub, verdict daemon.
 
 When a hardened terok container hits a blocked outbound destination,
 the operator sees a desktop notification with **Allow** and **Deny**
-buttons; the chosen verdict is written into the running nftables
-ruleset within a fraction of a second.  No restart, no shell into
-the container, no editing config files.
+buttons; the chosen verdict is written into the running container's nftables ruleset.
 
 <p align="center">
   <img src="docs/img/architecture.svg" alt="terok ecosystem — terok-clearance turns blocked-traffic events into operator decisions">

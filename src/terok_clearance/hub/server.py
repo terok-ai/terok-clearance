@@ -83,7 +83,7 @@ class ClearanceHub:
 
     Lifecycle: [`start`][terok_clearance.hub.server.ClearanceHub.start] brings everything up; [`stop`][terok_clearance.hub.server.ClearanceHub.stop] tears
     it down under individual timeouts so a flaky bus or a stuck
-    subscriber can't burn systemd's stop-sigterm deadline.
+    subscriber can't stall the per-container supervisor's teardown.
     """
 
     def __init__(
