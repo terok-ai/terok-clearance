@@ -136,7 +136,7 @@ class VerdictServer:
         """Configure the socket + shield executable path.
 
         *socket_context* — see
-        [`ClearanceHub.__init__`][terok_clearance.hub.server.ClearanceHub.__init__];
+        [`ClearanceHub`][terok_clearance.ClearanceHub];
         forwarded to
         [`bind_hardened`][terok_clearance.wire.socket.bind_hardened] so
         the verdict socket can carry a custom SELinux type.
