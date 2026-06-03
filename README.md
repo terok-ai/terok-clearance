@@ -1,5 +1,13 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://terok-ai.github.io/terok/terok-logo-w.svg">
+    <img src="https://terok-ai.github.io/terok/terok-logo-b.svg" alt="terok-clearance" width="120">
+  </picture>
+</p>
+
 # terok-clearance
 
+[![PyPI](https://img.shields.io/pypi/v/terok-clearance)](https://pypi.org/project/terok-clearance/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![REUSE status](https://api.reuse.software/badge/github.com/terok-ai/terok-clearance)](https://api.reuse.software/info/github.com/terok-ai/terok-clearance)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=terok-ai_terok-clearance&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=terok-ai_terok-clearance)
@@ -12,7 +20,7 @@ the operator sees a desktop notification with **Allow** and **Deny**
 buttons; the chosen verdict is written into the running container's nftables ruleset.
 
 <p align="center">
-  <img src="docs/img/architecture.svg" alt="terok ecosystem — terok-clearance turns blocked-traffic events into operator decisions">
+  <img src="https://terok-ai.github.io/terok/img/architecture.svg" alt="terok ecosystem — terok-clearance turns blocked-traffic events into operator decisions">
 </p>
 
 ## What is the clearance system
