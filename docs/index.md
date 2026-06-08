@@ -1,6 +1,6 @@
 # terok-clearance
 
-Live allow/deny prompts for the terok firewall — a per-container
+Live allow/deny prompts for the [terok](https://terok-ai.github.io/terok/) firewall — a per-container
 varlink hub and verdict helper, fanned into desktop notifications.
 
 When a hardened terok container hits a blocked outbound destination,
