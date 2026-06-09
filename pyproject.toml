@@ -20,7 +20,7 @@ dependencies = [
     "dbus-fast>=4.3.0,<5.0",
     "asyncvarlink>=0.3.1,<0.4.0",
     "pyyaml>=6.0",
-    "terok-util>=0.1.0,<0.2.0",
+    "terok-util>=0.2.0,<0.3.0",
 ]
 
 [project.urls]
@@ -49,7 +49,7 @@ classifiers = [
 packages = [
   { include = "terok_clearance", from = "src" },
 ]
-version = "0.7.0"
+version = "0.7.1"
 
 [tool.poetry.group.dev.dependencies]
 ruff = ">=0.15.16"
