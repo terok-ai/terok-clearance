@@ -13,9 +13,16 @@ the [`Dossier`][terok_clearance.domain.events.Dossier] dict — is a
 free-form string-to-string map: the wire format treats it as opaque
 and the renderer only dereferences the small set of well-known keys
 named by the ``DOSSIER_*`` constants below.
-"""
 
-from __future__ import annotations
+This module deliberately does **not** use ``from __future__ import
+annotations``: `asyncvarlink` derives the varlink IDL by reading the raw
+``dataclasses.fields(...).type`` of
+[`ClearanceEvent`][terok_clearance.domain.events.ClearanceEvent], and under PEP
+563 those become strings it can't resolve — so every field silently degrades to
+a foreign ``object``. asyncvarlink ``>=0.3.2`` rejects foreign types outright,
+turning that degradation into an import-time ``TypeError``. Keep the annotations
+as real objects.
+"""
 
 from dataclasses import dataclass, field
 from typing import Literal
