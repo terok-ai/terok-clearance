@@ -1,4 +1,10 @@
 # Changelog
+## v0.7.2 — asyncvarlink hotfix
+
+Fixes compatibility with asyncvarlink 0.3.2, https://github.com/terok-ai/terok-clearance/pull/171
+
+**Full Changelog**: https://github.com/terok-ai/terok-clearance/compare/v0.7.1...v0.7.2
+
 ## v0.7.1 — Emissary, Part II
 
 Added PyPI version badge and logo, https://github.com/terok-ai/terok-clearance/pull/156, homepage URL, terok cross-link, and minor docs update https://github.com/terok-ai/terok-clearance/pull/157, and updated dependencies.
