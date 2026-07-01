@@ -57,14 +57,14 @@ files = [
 
 [[package]]
 name = "asyncvarlink"
-version = "0.3.1"
+version = "0.3.2"
 description = "asyncio-compatible, type-driven varlink implementation supporting file descriptor passing"
 optional = false
 python-versions = ">=3.11"
 groups = ["main"]
 files = [
-    {file = "asyncvarlink-0.3.1-py3-none-any.whl", hash = "sha256:cb367071fdfb59614ab1677239199afc17dd3b0ab03bc2251eeed4e093d1d009"},
-    {file = "asyncvarlink-0.3.1.tar.gz", hash = "sha256:2883f9bed35aac9416a713dd6ed48eccdab693c182eb940569e105886cc75bd9"},
+    {file = "asyncvarlink-0.3.2-py3-none-any.whl", hash = "sha256:d9eee56a378008c36145b4aa4063eeda96bd685f62d3a4205200264109dd3d5a"},
+    {file = "asyncvarlink-0.3.2.tar.gz", hash = "sha256:80906780cc4fa786aeb05e5858f02326147eb14ffe752317b4e647fc51ed28a5"},
 ]
 
 [package.extras]
@@ -2367,4 +2367,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "5234dbdf0c113b7be1858a04ea40d665e0af809f5cfdcb5e3237b587ccc0c74f"
+content-hash = "f3418a8e42de7384cd2896b739963fc272159ba87ab1f55a94646c953917ac4f"

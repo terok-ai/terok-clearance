@@ -49,6 +49,25 @@ class TestClearanceEvent:
         assert event.domain == "example.test"
 
 
+class TestVarlinkSchema:
+    """The IDL asyncvarlink derives from the typed-Python interface.
+
+    Regression guard for the ``from __future__ import annotations`` trap:
+    PEP 563 stringifies the [`ClearanceEvent`][terok_clearance.domain.events.ClearanceEvent]
+    field annotations, asyncvarlink can't resolve the strings, and every
+    field silently collapses to a foreign ``object`` — which asyncvarlink
+    ``>=0.3.2`` then rejects at import time.
+    """
+
+    def test_event_fields_keep_their_concrete_types(self) -> None:
+        """Every ``ClearanceEvent`` field renders as its real varlink type."""
+        idl = Clearance1Interface.render_interface_description(comments=False)
+        assert "port: int" in idl
+        assert "ok: bool" in idl
+        assert "dossier: [string]string" in idl
+        assert ": object" not in idl, "field degraded to foreign type"
+
+
 class TestTypedErrors:
     """Varlink error replies carry a full ``org.terok.Clearance1.*`` name."""
 

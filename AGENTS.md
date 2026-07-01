@@ -110,3 +110,4 @@ dep; same-layer / cross-feature deps must be explicit in
 - **Minimal changes**: Make surgical, focused changes
 - **Existing tests**: Never remove or modify unrelated tests
 - **Dependencies**: Use Poetry; runtime dependencies are `dbus-fast`, `asyncvarlink`, `pyyaml`, and `terok-util`
+- **Pre-1.0 external deps**: pin third-party `0.x` dependencies to an exact patch (`asyncvarlink==0.3.2`), not a `<0.y+1` range. Pre-1.0 projects routinely ship breaking changes in patch/minor bumps, so a floating range lets a fresh install pull an incompatible release. Bump the pin deliberately (and re-run the suite) rather than letting it float. This is a terok-stack-wide practice; our own `terok-*` siblings are exempt (we control their API and range-pin them per the stack's version-sync rules).
