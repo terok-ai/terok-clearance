@@ -20,6 +20,11 @@
 # ensurepip-independent venv; its official-image binary is static musl.
 FROM docker.io/library/alpine:3.21
 
+# Ownership label: a Containerfile LABEL propagates into every
+# intermediate layer image, so the harness teardown can prune exactly
+# its own dangling generations (value = the harness IMAGE_PREFIX).
+LABEL "io.terok.matrix-test"="terok-clearance-test"
+
 RUN apk add --no-cache \
     dbus \
     shadow \

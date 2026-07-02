@@ -28,6 +28,11 @@
 # toolchain).
 FROM ghcr.io/void-linux/void-glibc:latest
 
+# Ownership label: a Containerfile LABEL propagates into every
+# intermediate layer image, so the harness teardown can prune exactly
+# its own dangling generations (value = the harness IMAGE_PREFIX).
+LABEL "io.terok.matrix-test"="terok-clearance-test"
+
 # Sync + self-update xbps first (rolling release), then install deps.
 # build tooling (base-devel + *-devel) covers dbus-python (built via
 # meson against dbus/glib) and any other sdist.  shadow provides useradd.

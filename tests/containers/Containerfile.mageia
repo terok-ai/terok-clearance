@@ -23,6 +23,11 @@
 # names differ from Fedora).
 FROM docker.io/mageia:9
 
+# Ownership label: a Containerfile LABEL propagates into every
+# intermediate layer image, so the harness teardown can prune exactly
+# its own dangling generations (value = the harness IMAGE_PREFIX).
+LABEL "io.terok.matrix-test"="terok-clearance-test"
+
 RUN dnf install -y \
         dbus \
         shadow-utils \

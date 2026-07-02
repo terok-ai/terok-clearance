@@ -83,6 +83,7 @@ usage() {
     echo "  --list         List available distros"
     echo "  --unit-only    Run only unit tests (fast)"
     echo "  --integ-only   Run only integration tests"
+    echo "  --keep-dangling  Skip the teardown prune of this harness's dangling layers"
     echo "  -h, --help     Show this help"
     echo ""
     echo "Default: run unit + integration tests."
@@ -238,6 +239,7 @@ BUILD_ONLY=false
 LIST_ONLY=false
 NO_CACHE=false
 TEST_SCOPE="all"
+KEEP_DANGLING=false
 TARGETS=()
 
 while [[ $# -gt 0 ]]; do
@@ -251,6 +253,7 @@ while [[ $# -gt 0 ]]; do
         --integ-only)
             [[ "$TEST_SCOPE" != "all" ]] && { echo "Error: --unit-only and --integ-only are mutually exclusive" >&2; exit 1; }
             TEST_SCOPE="integ" ;;
+        --keep-dangling) KEEP_DANGLING=true ;;
         -h|--help) usage; exit 0 ;;
         *) TARGETS+=("$1") ;;
     esac
@@ -316,6 +319,21 @@ done
 for target in "${FAILED[@]}"; do
     echo -e "  ${C_RED}FAIL${C_RESET}: $target"
 done
+
+
+# Teardown hygiene: dangling generations of exactly THIS harness's images
+# (Containerfile LABEL ownership) are pruned at idle IO priority — small
+# per-run increments instead of an hours-long backlog.  Opt out with
+# --keep-dangling.
+if ! $KEEP_DANGLING; then
+    echo ""
+    echo -e "${C_DIM}Pruning this harness's dangling image generations (idle io)…${C_RESET}"
+    prune=(podman image prune -f --filter "label=io.terok.matrix-test=$IMAGE_PREFIX")
+    command -v nice >/dev/null && prune=(nice -n19 "${prune[@]}")
+    command -v ionice >/dev/null && prune=(ionice -c3 "${prune[@]}")
+    pruned=$("${prune[@]}" | wc -l) || true
+    echo -e "${C_DIM}pruned ${pruned:-0} image record(s)${C_RESET}"
+fi
 
 if [[ ${#FAILED[@]} -gt 0 ]]; then
     exit 1
