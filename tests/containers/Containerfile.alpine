@@ -22,6 +22,7 @@ FROM docker.io/library/alpine:3.21
 
 RUN apk add --no-cache \
     dbus \
+    shadow \
     build-base python3-dev dbus-dev glib-dev pkgconf meson libffi-dev \
     python3 \
     git curl ca-certificates bash
