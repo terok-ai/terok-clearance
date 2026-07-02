@@ -48,6 +48,15 @@ declare -A DISTROS=(
     [fedora44]="fedora44"
     [podman]="podman"
     [alpine]="alpine"
+    [void]="void"
+    [mageia]="mageia"
+)
+
+# Slots that are non-systemd (OpenRC/runit/musl): the run-time preflight
+# hard-fails these if systemd is unexpectedly present.
+declare -A NON_SYSTEMD_SLOTS=(
+    [alpine]=1
+    [void]=1
 )
 
 # Non-root user baked into each Containerfile.
@@ -61,6 +70,8 @@ declare -A TEST_USERS=(
     [fedora44]="testrunner"
     [podman]="podman"
     [alpine]="testrunner"
+    [void]="testrunner"
+    [mageia]="testrunner"
 )
 
 usage() {
@@ -143,14 +154,14 @@ run_tests() {
             chown -R $test_user:$test_user $WORKSPACE_DIR
 
             # ── Non-systemd proof ──
-            # The alpine slot must run on a genuinely systemd-free host;
-            # fail loudly if a future base image regresses that.  Other
-            # slots just record their init system in the log.
+            # Non-systemd slots (alpine/void) must run on a genuinely
+            # systemd-free host; fail loudly if a future base image regresses
+            # that.  Other slots just record their init system in the log.
             echo \"--- init system: PID1=\$(cat /proc/1/comm 2>/dev/null || echo unknown) ---\"
             if command -v systemctl >/dev/null 2>&1 || [ -d /run/systemd/system ]; then
                 echo \"systemd: present\"
-                if [ \"$name\" = alpine ]; then
-                    echo \"FATAL: 'alpine' is the non-systemd slot but systemd was detected\" >&2
+                if [ \"${NON_SYSTEMD_SLOTS[$name]:-}\" = 1 ]; then
+                    echo \"FATAL: '$name' is a non-systemd slot but systemd was detected\" >&2
                     exit 1
                 fi
             else

@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
+# Void Linux (runit, glibc) — a non-systemd glibc matrix slot.
+#
+# Purpose: prove clearance's hub/verdict (varlink over manually-bound
+# unix sockets) and the desktop-notification fallback work on a
+# non-systemd host that is *glibc* (unlike the musl Alpine slot) — the
+# shape of the real non-systemd targets (Gentoo/OpenRC, SLURM nodes).
+# See terok-ai/terok#959 and #1113.  clearance was already varlink-only
+# (no systemd socket activation); this slot keeps that honest in CI.
+#
+# clearance is dbus/varlink-only — it does NOT use podman.  There is no
+# podman stack and no rootless-podman nesting here; only D-Bus (session
+# bus) plus the build toolchain dbus-python needs.
+#
+# Deliberately non-systemd (runit).  The run-matrix.sh preflight asserts
+# systemd is absent for this slot.  D-Bus (session bus) is installed so
+# the notification path and dbusmock fixtures can exercise the "bus
+# present" case; the headless "no bus" case is covered by unit tests.
+#
+# The build toolchain is required: dbus-python (pulled in by
+# python-dbusmock) has no wheel and is built from source via meson
+# against dbus-devel + glib-devel.
+#
+# NOTE: Void package names are best-effort and may need adjustment on the
+# first matrix run (Void uses xbps; -devel suffixes; base-devel for the
+# toolchain).
+FROM ghcr.io/void-linux/void-glibc:latest
+
+# Sync + self-update xbps first (rolling release), then install deps.
+# build tooling (base-devel + *-devel) covers dbus-python (built via
+# meson against dbus/glib) and any other sdist.  shadow provides useradd.
+RUN xbps-install -Suy xbps \
+    && xbps-install -Sy \
+        dbus \
+        shadow \
+        base-devel python3-devel dbus-devel glib-devel pkgconf meson libffi-devel \
+        python3 \
+        git curl ca-certificates bash
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+RUN useradd -m -s /bin/bash testrunner
+WORKDIR /src
