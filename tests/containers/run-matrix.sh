@@ -144,6 +144,7 @@ run_tests() {
     echo ""
 
     podman run --rm --name "$ctr_name" \
+        -e TERM=xterm \
         -v "$REPO_ROOT:$SOURCE_MOUNT:ro,Z" \
         "$image" \
         bash -c "
