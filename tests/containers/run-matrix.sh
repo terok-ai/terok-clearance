@@ -173,6 +173,8 @@ run_tests() {
             # ── Run everything as the test user ──
             su - $test_user -c '
                 set -e
+                export TEROK_MATRIX=1
+                export TEROK_EXPECT=dbus-daemon
                 cd $WORKSPACE_DIR
 
                 # dbusmock handles private bus lifecycle via fixtures.
