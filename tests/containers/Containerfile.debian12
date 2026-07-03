@@ -4,6 +4,11 @@
 # Debian 12 (Bookworm) — dbus + dbusmock deps, Python 3.12 via uv
 FROM docker.io/library/debian:12
 
+# Ownership label: a Containerfile LABEL propagates into every
+# intermediate layer image, so the harness teardown can prune exactly
+# its own dangling generations (value = the harness IMAGE_PREFIX).
+LABEL "io.terok.matrix-test"="terok-clearance-test"
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     dbus \
     gcc python3-dev libdbus-1-dev libglib2.0-dev pkg-config meson \

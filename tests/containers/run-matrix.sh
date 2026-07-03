@@ -37,6 +37,8 @@ else
 fi
 
 # Target distros: name -> Containerfile suffix
+# ``alpine`` is the non-systemd slot (OpenRC/musl) — it proves the
+# varlink hub/verdict run with no systemd at all.  See terok-ai/terok#959, #1113.
 declare -A DISTROS=(
     [debian12]="debian12"
     [ubuntu2404]="ubuntu2404"
@@ -45,6 +47,16 @@ declare -A DISTROS=(
     [fedora43]="fedora43"
     [fedora44]="fedora44"
     [podman]="podman"
+    [alpine]="alpine"
+    [void]="void"
+    [mageia]="mageia"
+)
+
+# Slots that are non-systemd (OpenRC/runit/musl): the run-time preflight
+# hard-fails these if systemd is unexpectedly present.
+declare -A NON_SYSTEMD_SLOTS=(
+    [alpine]=1
+    [void]=1
 )
 
 # Non-root user baked into each Containerfile.
@@ -57,6 +69,9 @@ declare -A TEST_USERS=(
     [fedora43]="testrunner"
     [fedora44]="testrunner"
     [podman]="podman"
+    [alpine]="testrunner"
+    [void]="testrunner"
+    [mageia]="testrunner"
 )
 
 usage() {
@@ -68,6 +83,7 @@ usage() {
     echo "  --list         List available distros"
     echo "  --unit-only    Run only unit tests (fast)"
     echo "  --integ-only   Run only integration tests"
+    echo "  --keep-dangling  Skip the teardown prune of this harness's dangling layers"
     echo "  -h, --help     Show this help"
     echo ""
     echo "Default: run unit + integration tests."
@@ -128,7 +144,8 @@ run_tests() {
     echo -e "    ${C_DIM}scope: $test_scope, user: $test_user${C_RESET}"
     echo ""
 
-    podman run --rm --name "$ctr_name" \
+    podman run --rm --replace --name "$ctr_name" \
+        -e TERM=xterm \
         -v "$REPO_ROOT:$SOURCE_MOUNT:ro,Z" \
         "$image" \
         bash -c "
@@ -138,9 +155,26 @@ run_tests() {
             cp -a $SOURCE_MOUNT $WORKSPACE_DIR
             chown -R $test_user:$test_user $WORKSPACE_DIR
 
+            # ── Non-systemd proof ──
+            # Non-systemd slots (alpine/void) must run on a genuinely
+            # systemd-free host; fail loudly if a future base image regresses
+            # that.  Other slots just record their init system in the log.
+            echo \"--- init system: PID1=\$(cat /proc/1/comm 2>/dev/null || echo unknown) ---\"
+            if command -v systemctl >/dev/null 2>&1 || [ -d /run/systemd/system ]; then
+                echo \"systemd: present\"
+                if [ \"${NON_SYSTEMD_SLOTS[$name]:-}\" = 1 ]; then
+                    echo \"FATAL: '$name' is a non-systemd slot but systemd was detected\" >&2
+                    exit 1
+                fi
+            else
+                echo \"systemd: absent — non-systemd host confirmed\"
+            fi
+
             # ── Run everything as the test user ──
             su - $test_user -c '
                 set -e
+                export TEROK_MATRIX=1
+                export TEROK_EXPECT=dbus-daemon
                 cd $WORKSPACE_DIR
 
                 # dbusmock handles private bus lifecycle via fixtures.
@@ -207,6 +241,7 @@ BUILD_ONLY=false
 LIST_ONLY=false
 NO_CACHE=false
 TEST_SCOPE="all"
+KEEP_DANGLING=false
 TARGETS=()
 
 while [[ $# -gt 0 ]]; do
@@ -220,6 +255,7 @@ while [[ $# -gt 0 ]]; do
         --integ-only)
             [[ "$TEST_SCOPE" != "all" ]] && { echo "Error: --unit-only and --integ-only are mutually exclusive" >&2; exit 1; }
             TEST_SCOPE="integ" ;;
+        --keep-dangling) KEEP_DANGLING=true ;;
         -h|--help) usage; exit 0 ;;
         *) TARGETS+=("$1") ;;
     esac
@@ -246,8 +282,14 @@ done
 
 warn_keyring
 
+# A slot whose image fails to build is recorded and reported as FAILED, but
+# does NOT abort the whole matrix — so one run surfaces every distro's issues.
+declare -A BUILD_FAILED_MAP=()
 for target in "${TARGETS[@]}"; do
-    build_image "$target"
+    if ! build_image "$target"; then
+        echo -e "${C_RED}==> Build FAILED for ${C_BOLD}$target${C_RED} — recording and continuing${C_RESET}" >&2
+        BUILD_FAILED_MAP[$target]=1
+    fi
 done
 
 if $BUILD_ONLY; then
@@ -259,6 +301,11 @@ PASSED=()
 FAILED=()
 
 for target in "${TARGETS[@]}"; do
+    if [[ -n "${BUILD_FAILED_MAP[$target]:-}" ]]; then
+        echo -e "${C_RED}==> $target: FAIL (image build failed)${C_RESET}" >&2
+        FAILED+=("$target")
+        continue
+    fi
     if run_tests "$target" "$TEST_SCOPE"; then
         PASSED+=("$target")
     else
@@ -274,6 +321,21 @@ done
 for target in "${FAILED[@]}"; do
     echo -e "  ${C_RED}FAIL${C_RESET}: $target"
 done
+
+
+# Teardown hygiene: dangling generations of exactly THIS harness's images
+# (Containerfile LABEL ownership) are pruned at idle IO priority — small
+# per-run increments instead of an hours-long backlog.  Opt out with
+# --keep-dangling.
+if ! $KEEP_DANGLING; then
+    echo ""
+    echo -e "${C_DIM}Pruning this harness's dangling image generations (idle io)…${C_RESET}"
+    prune=(podman image prune -f --filter "label=io.terok.matrix-test=$IMAGE_PREFIX")
+    command -v nice >/dev/null && prune=(nice -n19 "${prune[@]}")
+    command -v ionice >/dev/null && prune=(ionice -c3 "${prune[@]}")
+    pruned=$("${prune[@]}" | wc -l) || true
+    echo -e "${C_DIM}pruned ${pruned:-0} image record(s)${C_RESET}"
+fi
 
 if [[ ${#FAILED[@]} -gt 0 ]]; then
     exit 1

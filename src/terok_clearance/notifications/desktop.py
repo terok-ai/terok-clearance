@@ -242,11 +242,31 @@ class DbusNotifier:
             # unreachable.
             if self._conn is not None:
                 return  # type: ignore[unreachable]
-            # AUTH EXTERNAL: the daemon checks SO_PEERCRED, so the
-            # advertised UID must be the kernel-visible (outer) one.
-            # ``os.geteuid()`` returns inner-userns UID inside a rootless
-            # container hook — mismatch → REJECTED.
-            bus = await MessageBus(auth=AuthExternal(uid=host_uid())).connect()
+            # AUTH EXTERNAL: the daemon authenticates by SO_PEERCRED, so the
+            # advertised UID must be the connecting process's UID *as the
+            # daemon's user namespace sees it*.  Reaching the operator's host
+            # session bus from inside a rootless container, that is the outer
+            # (host) UID (``host_uid()``); for a bus in our own namespace (an
+            # in-namespace sidecar, or a dbusmock test daemon) it is the inner
+            # ``os.geteuid()``.  Try the outer UID first (the desktop-notify
+            # case) and fall back to the inner one, so both topologies work.
+            # When there is no userns translation the two are equal and this
+            # is a single attempt — identical to the old behaviour.
+            candidate_uids: list[int] = []
+            for _uid in (host_uid(), os.geteuid()):
+                if _uid not in candidate_uids:
+                    candidate_uids.append(_uid)
+            bus = None
+            last_exc: Exception | None = None
+            for _uid in candidate_uids:
+                try:
+                    bus = await MessageBus(auth=AuthExternal(uid=_uid)).connect()
+                    break
+                except Exception as exc:  # noqa: BLE001 — retry with next UID
+                    last_exc = exc
+            if bus is None:
+                assert last_exc is not None
+                raise last_exc
             try:
                 # Build the proxy from a hand-rolled XML — the
                 # spec-defined shape — instead of a runtime introspect

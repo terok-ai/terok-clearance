@@ -10,6 +10,8 @@ The ``notification_daemon`` fixture spawns the built-in
 external binaries beyond ``dbus-daemon`` itself.
 """
 
+import os
+import shutil
 import subprocess
 from collections.abc import AsyncIterator, Iterator
 
@@ -22,6 +24,33 @@ from terok_clearance.notifications.protocol import Notifier
 
 # Activate dbusmock's pytest fixtures (dbusmock_session, dbusmock_system).
 pytest_plugins = "dbusmock.pytest_fixtures"
+
+
+# ── Matrix capability contract ───────────────────────────────────────
+# The private-bus fixtures need exactly one external binary: dbus-daemon.
+# On a dev machine its absence is a host limitation; inside the matrix
+# the harness built the image, so TEROK_EXPECT (exported by
+# run-matrix.sh) makes absence fail the session up front instead of
+# every test erroring or skipping in a way that reads as green.
+_CAPABILITY_PROBES = {
+    "dbus-daemon": lambda: shutil.which("dbus-daemon") is not None,
+}
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Fail the whole session when the matrix capability contract is broken."""
+    expected = {cap for cap in os.environ.get("TEROK_EXPECT", "").split(",") if cap}
+    if not expected:
+        return
+    unknown = expected - _CAPABILITY_PROBES.keys()
+    if unknown:
+        pytest.exit(f"TEROK_EXPECT names unknown capabilities: {sorted(unknown)}", returncode=3)
+    missing = sorted(cap for cap in expected if not _CAPABILITY_PROBES[cap]())
+    if missing:
+        pytest.exit(
+            "matrix capability contract broken — expected but missing: " + ", ".join(missing),
+            returncode=3,
+        )
 
 
 @pytest.fixture(scope="session")

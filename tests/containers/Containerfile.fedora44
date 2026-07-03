@@ -4,6 +4,11 @@
 # Fedora 44 — dbus + dbusmock deps, looking forward to the next Fedora line
 FROM registry.fedoraproject.org/fedora:44
 
+# Ownership label: a Containerfile LABEL propagates into every
+# intermediate layer image, so the harness teardown can prune exactly
+# its own dangling generations (value = the harness IMAGE_PREFIX).
+LABEL "io.terok.matrix-test"="terok-clearance-test"
+
 RUN dnf install -y \
     dbus-daemon \
     gcc python3-devel dbus-devel glib2-devel pkgconf meson \
