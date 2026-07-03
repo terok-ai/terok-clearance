@@ -144,7 +144,7 @@ run_tests() {
     echo -e "    ${C_DIM}scope: $test_scope, user: $test_user${C_RESET}"
     echo ""
 
-    podman run --rm --name "$ctr_name" \
+    podman run --rm --replace --name "$ctr_name" \
         -e TERM=xterm \
         -v "$REPO_ROOT:$SOURCE_MOUNT:ro,Z" \
         "$image" \
