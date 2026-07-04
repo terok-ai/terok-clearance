@@ -428,7 +428,7 @@ def _default_reader_socket() -> Path:
 async def serve() -> None:  # pragma: no cover — integration path
     """Run the hub service until SIGINT/SIGTERM.
 
-    The entry point ``terok-clearance serve`` hands off here.  Blocks forever
+    The entry point ``terok-clearance-hub serve`` hands off here.  Blocks forever
     on a signal-set [`asyncio.Event`][asyncio.Event]; the first SIGINT/SIGTERM
     flips it, then [`stop`][terok_clearance.hub.server.ClearanceHub.stop]
     tears down the server under a timeout.

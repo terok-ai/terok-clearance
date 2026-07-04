@@ -6,7 +6,7 @@
 One process, one socket, one method (``Apply``).  In the
 per-container-supervisor model the helper runs inside the
 [`Sandbox`][terok_sandbox.Sandbox] supervisor alongside the hub, on a
-per-container socket; the standalone ``terok-clearance serve-verdict``
+per-container socket; the standalone ``terok-clearance-hub serve-verdict``
 entry point is kept for integration testing.
 
 Stateless: no authz decisions, no request-id binding, no fan-out.

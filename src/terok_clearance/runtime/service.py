@@ -6,7 +6,7 @@
 The hub ([`terok_clearance.serve`][terok_clearance.serve]) and the
 verdict helper ([`terok_clearance.verdict.server.serve`][terok_clearance.verdict.server.serve])
 both expose ``serve()`` coroutines that drive the standalone CLI
-verbs (``terok-clearance serve`` / ``serve-verdict``) used by
+verbs (``terok-clearance-hub serve`` / ``serve-verdict``) used by
 integration tests.  Both need the same two pieces of plumbing: log
 to stderr so the launching process picks it up, and block on
 ``SIGINT`` / ``SIGTERM`` until the operator tears them down.
