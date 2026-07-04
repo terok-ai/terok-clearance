@@ -2113,24 +2113,20 @@ tomli-w = ">=1.0,<2.0"
 
 [[package]]
 name = "terok-util"
-version = "0.2.0"
+version = "0.2.1"
 description = "Shared utility library for the terok-* sibling packages"
 optional = false
-python-versions = ">=3.12,<4.0"
+python-versions = "<4.0,>=3.12"
 groups = ["main"]
-files = []
-develop = false
+files = [
+    {file = "terok_util-0.2.1-py3-none-any.whl", hash = "sha256:51a2dd3e5d8de52cc349aa4d3fab46a05c02c190a005525bf5b21c753e421f2f"},
+    {file = "terok_util-0.2.1.tar.gz", hash = "sha256:7311147632b585c0e3764ba3092044f5d330e3515327a315866743ef90459e83"},
+]
 
 [package.dependencies]
 jinja2 = ">=3.1,<4.0"
 platformdirs = ">=4.10,<5.0"
 "ruamel.yaml" = "0.19.1"
-
-[package.source]
-type = "git"
-url = "https://github.com/terok-ai/terok-util.git"
-reference = "879265e4808f1bdb8bdd7b21d71508021b9e90dd"
-resolved_reference = "879265e4808f1bdb8bdd7b21d71508021b9e90dd"
 
 [[package]]
 name = "tomli"
@@ -2372,4 +2368,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "a5913afc2fc6b55dbcd8071312036af222b8e2c1464e3935709be04df76c93a7"
+content-hash = "4b6053cd9f48412439967033d1fa35a50f69c524bc1b6b8bc24b1d8cae0fa6fc"
