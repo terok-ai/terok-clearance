@@ -29,8 +29,8 @@ pytest_plugins = "dbusmock.pytest_fixtures"
 # ── Matrix capability contract ───────────────────────────────────────
 # The private-bus fixtures need exactly one external binary: dbus-daemon.
 # On a dev machine its absence is a host limitation; inside the matrix
-# the harness built the image, so TEROK_EXPECT (exported by
-# run-matrix.sh) makes absence fail the session up front instead of
+# the harness built the image, so TEROK_EXPECT (exported by the
+# matrix engine) makes absence fail the session up front instead of
 # every test erroring or skipping in a way that reads as green.
 _CAPABILITY_PROBES = {
     "dbus-daemon": lambda: shutil.which("dbus-daemon") is not None,

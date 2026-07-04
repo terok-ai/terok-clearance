@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+#
+# Multi-distro test matrix for terok-clearance — declarative input to the
+# shared engine in terok-util.  Run with `poetry run terok-matrix` from
+# the repo root (or `make test-matrix`).
+#
+# clearance is dbus/varlink-only — no podman inside the containers, so it
+# uses the light dbus image flavor (D-Bus session bus + the meson/glib
+# toolchain dbus-python needs; dbusmock fixtures manage the bus).
+
+image-prefix: terok-clearance-test
+flavor: dbus
+expect: [dbus-daemon]
+poetry-groups: [test]
+
+slots:
+  debian12:
+  ubuntu2404:
+  ubuntu2604:
+  debian13:
+  fedora43:
+  fedora44:
+  podman:
+  alpine:
+  void:
+  mageia:
+
+phases:
+  - name: unit tests
+    scope: unit
+    pytest: tests/ --ignore=tests/integration -v --tb=short
+  - name: integration tests
+    scope: integ
+    pytest: tests/integration/ -v --tb=short

@@ -36,9 +36,10 @@ test-integration:
 	mkdir -p $(REPORTS_DIR)
 	poetry run pytest tests/integration/ -v --tb=short --junitxml=$(INTEGRATION_JUNIT_XML) -o junit_family=legacy
 
-# Run multi-distro test matrix (requires podman on host)
+# Run multi-distro test matrix (requires podman on host) — slots declared
+# in tests/containers/matrix.yml, engine provided by terok-util.
 test-matrix:
-	./tests/containers/run-matrix.sh $(DISTROS)
+	poetry run terok-matrix $(SLOTS)
 
 # Write Ruff's JSON report without failing on findings.
 ruff-report:
