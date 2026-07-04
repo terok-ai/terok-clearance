@@ -13,7 +13,7 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=terok-ai_terok-clearance&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=terok-ai_terok-clearance)
 
 Live allow/deny prompts for the [terok-shield](https://github.com/terok-ai/terok-shield) firewall — desktop
-notifications, varlink hub, verdict daemon.
+notifications, varlink hub, verdict helper.
 
 When a hardened terok container hits a blocked outbound destination,
 the operator sees a desktop notification with **Allow** and **Deny**
@@ -43,8 +43,8 @@ sequenceDiagram
     S->>H: blocked-connection event<br/>(NFLOG → varlink)
     H->>U: desktop notification<br/>"Allow api.example.com?"
     U->>H: clicks "Allow"
-    H->>V: ApplyVerdict(allow, dest)
-    V->>S: terok-shield allow api.example.com
+    H->>V: Apply(container, dest, allow)
+    V->>S: terok-shield allow … api.example.com
     S-->>S: nft add element …
     S-->>C: subsequent packets pass
 ```
@@ -53,19 +53,20 @@ The hub and the verdict server are composed in-process by the
 per-container supervisor that ``terok-sandbox``'s OCI hook spawns —
 one supervisor (and therefore one hub socket) per container.  The
 hub fans events out to whichever operator UIs are subscribed (the
-plain-terminal `terok-clearance` tool, the embedded `terok-tui`
-screen, a `DbusNotifier` listening on the session bus).  The
-verdict server is the only piece that calls into the container's
-network namespace, so it sits behind the hub's authz boundary and
-keeps the privileged surface small.
+`terok-clearance-hub clearance` terminal tool, the embedded
+`terok-tui` screen, a `DbusNotifier` posting popups on the D-Bus
+session bus).  The verdict server is the only piece that execs
+`terok-shield` (which reaches into the container's network
+namespace), so it sits behind the hub's authz boundary and keeps
+the privileged exec path isolated.
 
 ## What it provides
 
 - **Async-first Python API** — `create_notifier()`, `Notifier`
   protocol, `DbusNotifier`, `CallbackNotifier`, `NullNotifier`
 - **Varlink hub** — `ClearanceHub`, `ClearanceClient`,
-  `EventSubscriber` for in-process subscribers (used by the
-  TUI to render live verdicts)
+  `EventSubscriber` — the subscriber API operator UIs build on
+  (the TUI renders live verdicts through it)
 - **Multi-socket subscriber** — `MultiSocketSubscriber` multiplexes
   every per-container hub socket under `$XDG_RUNTIME_DIR/terok/clearance/`
   so a single UI sees the union of every supervisor's event stream
@@ -89,9 +90,8 @@ the running ruleset.  Lifecycle is owned by
 per-container supervisor, which composes the hub and verdict server
 in-process for every container it watches.
 
-The package is genuinely usable on its own — the notification API
-and the protocol abstractions are stable enough to sit at the heart
-of any desktop-driven IPC use case.
+The notification API (`create_notifier()`, the `Notifier` protocol)
+is usable standalone for generic desktop-notification needs.
 
 ## Requirements
 
@@ -107,8 +107,8 @@ pip install terok-clearance
 ```
 
 For most users this dependency is pulled in transitively by
-`terok-sandbox`'s setup phase.  Install it directly only when
-embedding the API in your own tooling.
+`terok-sandbox`.  Install it directly only when embedding the API
+in your own tooling.
 
 ## Quick start
 
@@ -122,20 +122,19 @@ async def main():
     notifier = await create_notifier(app_name="terok")
     action_received = asyncio.Event()
 
-    def on_action(nid, key):
-        print(f"{nid}: {key}")
+    def on_action(action_key):
+        print(action_key)
         action_received.set()
-
-    notifier.on_action(on_action)
 
     nid = await notifier.notify(
         "Clearance request",
         "Task alpha wants access to api.github.com:443",
-        actions={"allow": "Allow", "deny": "Deny"},
+        actions=[("allow", "Allow"), ("deny", "Deny")],
     )
+    await notifier.on_action(nid, on_action)
 
     await action_received.wait()
-    await notifier.close()
+    await notifier.disconnect()
 
 asyncio.run(main())
 ```
