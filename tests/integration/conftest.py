@@ -10,13 +10,13 @@ The ``notification_daemon`` fixture spawns the built-in
 external binaries beyond ``dbus-daemon`` itself.
 """
 
-import os
 import shutil
 import subprocess
 from collections.abc import AsyncIterator, Iterator
 
 import pytest
 from dbusmock import SpawnedMock
+from terok_util.matrix import check_capability_contract
 
 from terok_clearance import create_notifier
 from terok_clearance.notifications.desktop import DbusNotifier
@@ -39,18 +39,8 @@ _CAPABILITY_PROBES = {
 
 def pytest_sessionstart(session: pytest.Session) -> None:
     """Fail the whole session when the matrix capability contract is broken."""
-    expected = {cap for cap in os.environ.get("TEROK_EXPECT", "").split(",") if cap}
-    if not expected:
-        return
-    unknown = expected - _CAPABILITY_PROBES.keys()
-    if unknown:
-        pytest.exit(f"TEROK_EXPECT names unknown capabilities: {sorted(unknown)}", returncode=3)
-    missing = sorted(cap for cap in expected if not _CAPABILITY_PROBES[cap]())
-    if missing:
-        pytest.exit(
-            "matrix capability contract broken — expected but missing: " + ", ".join(missing),
-            returncode=3,
-        )
+    if broken := check_capability_contract(_CAPABILITY_PROBES):
+        pytest.exit(broken, returncode=3)
 
 
 @pytest.fixture(scope="session")
