@@ -820,7 +820,7 @@ version = "3.1.6"
 description = "A very fast and expressive template engine."
 optional = false
 python-versions = ">=3.7"
-groups = ["dev", "docs"]
+groups = ["main", "dev", "docs"]
 files = [
     {file = "jinja2-3.1.6-py3-none-any.whl", hash = "sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67"},
     {file = "jinja2-3.1.6.tar.gz", hash = "sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d"},
@@ -997,7 +997,7 @@ version = "3.0.3"
 description = "Safely add untrusted strings to HTML/XML markup."
 optional = false
 python-versions = ">=3.9"
-groups = ["dev", "docs"]
+groups = ["main", "dev", "docs"]
 files = [
     {file = "markupsafe-3.0.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:2f981d352f04553a7171b8e44369f2af4055f888dfb147d55e42d29e29e74559"},
     {file = "markupsafe-3.0.3-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:e1c1493fb6e50ab01d20a22826e57520f1284df32f2d8601fdd90b6304601419"},
@@ -2113,19 +2113,20 @@ tomli-w = ">=1.0,<2.0"
 
 [[package]]
 name = "terok-util"
-version = "0.2.0"
+version = "0.2.1"
 description = "Shared utility library for the terok-* sibling packages"
 optional = false
 python-versions = "<4.0,>=3.12"
 groups = ["main"]
 files = [
-    {file = "terok_util-0.2.0-py3-none-any.whl", hash = "sha256:74f047643962ff64e62e354958fe37caa91f04dc811eb61f6af41220f8311ef8"},
-    {file = "terok_util-0.2.0.tar.gz", hash = "sha256:8fc285c4fdcfc6a2c3aeb04236f85c49093cb60c8602fe0e43d1e8b9a6f3e7cd"},
+    {file = "terok_util-0.2.1-py3-none-any.whl", hash = "sha256:51a2dd3e5d8de52cc349aa4d3fab46a05c02c190a005525bf5b21c753e421f2f"},
+    {file = "terok_util-0.2.1.tar.gz", hash = "sha256:7311147632b585c0e3764ba3092044f5d330e3515327a315866743ef90459e83"},
 ]
 
 [package.dependencies]
-platformdirs = ">=4.10.0"
-"ruamel.yaml" = ">=0.18"
+jinja2 = ">=3.1,<4.0"
+platformdirs = ">=4.10,<5.0"
+"ruamel.yaml" = "0.19.1"
 
 [[package]]
 name = "tomli"
@@ -2367,4 +2368,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "d9fe6d947059a33d35e304ef502e59712f0954c583a3b1ee1991c37794cbd217"
+content-hash = "8f9341932727bad7124f7ce8a02138cf5fa51c5371a585b30c2a07e6f7c7aacf"
