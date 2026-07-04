@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""CLI entry point for ``terok-clearance`` — desktop notification tools.
+"""CLI entry point for ``terok-clearance-hub`` — desktop notification tools.
 
 Builds the argument parser from the [`COMMANDS`][terok_clearance.commands.COMMANDS] registry so the
 standalone CLI and the terok integration layer share a single source
@@ -34,7 +34,7 @@ def _add_arg(parser: argparse.ArgumentParser, arg: ArgDef) -> None:
 def _build_parser() -> argparse.ArgumentParser:
     """Build the top-level argument parser from the command registry."""
     parser = argparse.ArgumentParser(
-        prog="terok-clearance",
+        prog="terok-clearance-hub",
         description="Desktop notification tools for the terok ecosystem.",
     )
     sub = parser.add_subparsers(dest="command")
@@ -48,7 +48,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    """Entry point for ``terok-clearance``."""
+    """Entry point for ``terok-clearance-hub``."""
     parser = _build_parser()
     args = parser.parse_args()
 
