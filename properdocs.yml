@@ -39,13 +39,16 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
+          # Sibling entries carry an explicit base_url: the .inv URIs are
+          # relative, so without it mkdocstrings would aim cross-repo links
+          # at the docs-inventories bucket instead of the sibling Pages site.
           inventories:
             - https://docs.python.org/3/objects.inv
-            - https://terok-ai.github.io/terok-util/objects.inv
-            - https://terok-ai.github.io/terok-shield/objects.inv
-            - https://terok-ai.github.io/terok-sandbox/objects.inv
-            - https://terok-ai.github.io/terok-executor/objects.inv
-            - https://terok-ai.github.io/terok/objects.inv
+            - { url: "https://raw.githubusercontent.com/terok-ai/docs-inventories/master/terok-util/objects.inv", base_url: "https://terok-ai.github.io/terok-util/dev/" }
+            - { url: "https://raw.githubusercontent.com/terok-ai/docs-inventories/master/terok-shield/objects.inv", base_url: "https://terok-ai.github.io/terok-shield/dev/" }
+            - { url: "https://raw.githubusercontent.com/terok-ai/docs-inventories/master/terok-sandbox/objects.inv", base_url: "https://terok-ai.github.io/terok-sandbox/dev/" }
+            - { url: "https://raw.githubusercontent.com/terok-ai/docs-inventories/master/terok-executor/objects.inv", base_url: "https://terok-ai.github.io/terok-executor/dev/" }
+            - { url: "https://raw.githubusercontent.com/terok-ai/docs-inventories/master/terok/objects.inv", base_url: "https://terok-ai.github.io/terok/dev/" }
           options:
             docstring_style: google
             show_source: true
@@ -95,6 +98,11 @@ nav:
   - API Reference: reference/
 
 extra:
+  # "mike" names the versions.json contract, not the tool: the deployed
+  # versioned tree is assembled by mkdocs_terok.versions via the
+  # publish-versioned-docs.yml reusable workflow.
+  version:
+    provider: mike
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/terok-ai/terok-clearance
