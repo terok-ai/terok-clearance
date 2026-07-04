@@ -1,4 +1,11 @@
 # Changelog
+## v0.7.3 — The Celestial Temple
+
+* In-namespace bus auth; non-systemd + Mageia slots, https://github.com/terok-ai/terok-clearance/pull/173
+* The CLI identifies itself by its installed name, https://github.com/terok-ai/terok-clearance/pull/178
+
+**Full Changelog**: https://github.com/terok-ai/terok-clearance/compare/v0.7.2...v0.7.3
+
 ## v0.7.2 — asyncvarlink hotfix
 
 Fixes compatibility with asyncvarlink 0.3.2, https://github.com/terok-ai/terok-clearance/pull/171
