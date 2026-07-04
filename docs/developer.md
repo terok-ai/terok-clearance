@@ -36,10 +36,11 @@ make format           # auto-fix lint issues
 
 # Before pushing
 make test-unit        # unit tests with coverage
-make check            # core local suite (lint + test-unit + tach + security + docstrings + deadcode + reuse)
+make check            # core local suite (lint + test-unit + tach + typecheck + security + docstrings + deadcode + reuse)
 
 # Other
 make tach             # check module boundary rules
+make typecheck        # mypy static type check
 make security         # bandit SAST scan
 make docstrings       # docstring coverage (95% minimum)
 make reuse            # SPDX license compliance
