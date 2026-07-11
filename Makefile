@@ -1,4 +1,4 @@
-.PHONY: all lint format test test-unit test-integration test-matrix ruff-report bandit-report sonar-inputs tach security docstrings complexity deadcode reuse typecheck check install install-dev docs docs-build clean spdx
+.PHONY: all lint format test test-unit test-fast test-integration test-matrix ruff-report bandit-report sonar-inputs tach security docstrings complexity deadcode reuse typecheck check install install-dev docs docs-build clean spdx
 
 REPORTS_DIR ?= reports
 COVERAGE_XML ?= $(REPORTS_DIR)/coverage.xml
@@ -24,6 +24,13 @@ lint:
 format:
 	poetry run ruff check --fix .
 	poetry run ruff format .
+
+# Fast dev loop: run only the tests affected by the branch diff (tach
+# impact analysis), no coverage.  Impact analysis follows the Python
+# import graph only — after touching non-Python inputs (resources/,
+# YAML, templates, scripts) run the full `make test` instead.
+test-fast:
+	poetry run pytest tests/ --ignore=tests/integration --tach
 
 # Run unit tests with coverage (excludes integration tests)
 test-unit:
