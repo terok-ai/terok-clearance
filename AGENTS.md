@@ -21,10 +21,22 @@
 
 ## Build, Lint, and Test Commands
 
+**During development — ALWAYS use the fast loop:**
+```bash
+make test-fast # Only the tests affected by your branch diff (tach impact analysis)
+```
+Rerunning the full suite after every edit is the single biggest time sink in
+agent dev loops — don't do it. Iterate with `make test-fast`; run the full
+`make test` exactly once, right before committing. One exception: impact
+analysis follows the Python import graph only, so after changing non-Python
+inputs (resource YAML, templates, shell scripts) `make test-fast` skips tests
+that are actually affected — run the full `make test` for those changes.
+
 **Before committing:**
 ```bash
 make lint      # Run linter (required before every commit)
 make format    # Auto-fix lint issues if lint fails
+make test      # Full unit suite — once, after iterating with test-fast
 ```
 
 **Before pushing:**
