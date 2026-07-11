@@ -18,35 +18,31 @@ class TestPublicApi:
     def test_all_exports(self):
         expected = {
             "ALL_NOTIFY_CATEGORIES",
-            "ArgDef",
-            "CLEARANCE_INTERFACE_NAME",
             "COMMANDS",
             "CallbackNotifier",
             "ClearanceClient",
             "ClearanceEvent",
             "ClearanceHub",
-            "CommandDef",
             "EventSubscriber",
-            "InvalidAction",
             "MultiSocketSubscriber",
             "NOTIFY_BLOCKED",
-            "NOTIFY_CONTAINER_EXITED",
-            "NOTIFY_CONTAINER_STARTED",
-            "NOTIFY_SHIELD_DOWN",
-            "NOTIFY_SHIELD_UP",
             "NOTIFY_VERDICT",
             "Notification",
-            "ShieldCliFailed",
-            "UnknownRequest",
-            "VerdictAction",
             "VerdictClient",
             "VerdictServer",
-            "configure_logging",
             "create_notifier",
             "default_clearance_socket_path",
-            "serve",
         }
         assert set(terok_clearance.__all__) == expected
+
+    def test_all_matches_lazy_map(self):
+        """``__all__`` and the lazy re-export map stay in lockstep."""
+        assert set(terok_clearance.__all__) == set(terok_clearance._LAZY)
+
+    def test_all_names_resolve(self):
+        """Every ``__all__`` name imports lazily via ``__getattr__``."""
+        for name in terok_clearance.__all__:
+            assert getattr(terok_clearance, name) is not None
 
     def test_notifier_is_protocol(self):
         assert isinstance(NullNotifier(), Notifier)

@@ -46,61 +46,84 @@ multiplex across the per-container sockets via
 [`MultiSocketSubscriber`][terok_clearance.MultiSocketSubscriber].
 """
 
-from terok_util import ArgDef, CommandDef
+from typing import TYPE_CHECKING
 
-from terok_clearance.client.client import ClearanceClient
-from terok_clearance.client.subscriber import (
-    ALL_NOTIFY_CATEGORIES,
-    NOTIFY_BLOCKED,
-    NOTIFY_CONTAINER_EXITED,
-    NOTIFY_CONTAINER_STARTED,
-    NOTIFY_SHIELD_DOWN,
-    NOTIFY_SHIELD_UP,
-    NOTIFY_VERDICT,
-    EventSubscriber,
-    MultiSocketSubscriber,
-)
-from terok_clearance.commands import COMMANDS
-from terok_clearance.domain.events import ClearanceEvent, VerdictAction
-from terok_clearance.hub.server import ClearanceHub, serve
-from terok_clearance.notifications.callback import CallbackNotifier, Notification
-from terok_clearance.notifications.factory import create_notifier
-from terok_clearance.runtime.service import configure_logging
-from terok_clearance.verdict.client import VerdictClient
-from terok_clearance.verdict.server import VerdictServer
-from terok_clearance.wire.errors import InvalidAction, ShieldCliFailed, UnknownRequest
-from terok_clearance.wire.interface import CLEARANCE_INTERFACE_NAME
-from terok_clearance.wire.socket import default_clearance_socket_path
+# Lazy re-export map: public name → the submodule that defines it.  The
+# barrel is Tier-A — importing ``terok_clearance`` binds nothing beyond
+# this table, so ``asyncvarlink`` (hub/client/verdict), ``dbus_fast``
+# (subscriber/notifications) and even ``terok_util`` (``COMMANDS``) stay
+# off the import path until the matching symbol is first touched.
+_LAZY = {
+    "ALL_NOTIFY_CATEGORIES": "terok_clearance.client.subscriber",
+    "NOTIFY_BLOCKED": "terok_clearance.client.subscriber",
+    "NOTIFY_VERDICT": "terok_clearance.client.subscriber",
+    "EventSubscriber": "terok_clearance.client.subscriber",
+    "MultiSocketSubscriber": "terok_clearance.client.subscriber",
+    "ClearanceClient": "terok_clearance.client.client",
+    "ClearanceEvent": "terok_clearance.domain.events",
+    "ClearanceHub": "terok_clearance.hub.server",
+    "VerdictClient": "terok_clearance.verdict.client",
+    "VerdictServer": "terok_clearance.verdict.server",
+    "CallbackNotifier": "terok_clearance.notifications.callback",
+    "Notification": "terok_clearance.notifications.callback",
+    "create_notifier": "terok_clearance.notifications.factory",
+    "default_clearance_socket_path": "terok_clearance.wire.socket",
+    "COMMANDS": "terok_clearance.commands",
+}
 
 __all__ = [
     "ALL_NOTIFY_CATEGORIES",
-    "ArgDef",
-    "CLEARANCE_INTERFACE_NAME",
     "COMMANDS",
     "CallbackNotifier",
     "ClearanceClient",
     "ClearanceEvent",
     "ClearanceHub",
-    "CommandDef",
     "EventSubscriber",
-    "InvalidAction",
     "MultiSocketSubscriber",
     "NOTIFY_BLOCKED",
-    "NOTIFY_CONTAINER_EXITED",
-    "NOTIFY_CONTAINER_STARTED",
-    "NOTIFY_SHIELD_DOWN",
-    "NOTIFY_SHIELD_UP",
     "NOTIFY_VERDICT",
     "Notification",
-    "ShieldCliFailed",
-    "UnknownRequest",
-    "VerdictAction",
     "VerdictClient",
     "VerdictServer",
-    "configure_logging",
     "create_notifier",
     "default_clearance_socket_path",
-    "serve",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Import and cache a public symbol on first access (PEP 562)."""
+    try:
+        module = _LAZY[name]
+    except KeyError:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from None
+    import importlib
+
+    value = getattr(importlib.import_module(module), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    """List resolved and lazy names alike for tab-completion and ``dir()``."""
+    return sorted({*globals(), *_LAZY})
+
+
+if TYPE_CHECKING:  # keep IDEs and mypy seeing the full public surface
+    from terok_clearance.client.client import ClearanceClient
+    from terok_clearance.client.subscriber import (
+        ALL_NOTIFY_CATEGORIES,
+        NOTIFY_BLOCKED,
+        NOTIFY_VERDICT,
+        EventSubscriber,
+        MultiSocketSubscriber,
+    )
+    from terok_clearance.commands import COMMANDS
+    from terok_clearance.domain.events import ClearanceEvent
+    from terok_clearance.hub.server import ClearanceHub
+    from terok_clearance.notifications.callback import CallbackNotifier, Notification
+    from terok_clearance.notifications.factory import create_notifier
+    from terok_clearance.verdict.client import VerdictClient
+    from terok_clearance.verdict.server import VerdictServer
+    from terok_clearance.wire.socket import default_clearance_socket_path
 
 __version__ = "0.0.0"

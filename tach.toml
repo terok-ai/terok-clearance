@@ -36,14 +36,15 @@ name = "domain"
 
 
 # ── Package root ────────────────────────────────────────────────────
-# Public re-exports from every feature sub-package.
+# Public re-exports from every feature sub-package, bound lazily via a
+# PEP 562 ``__getattr__``.  The re-export imports run through
+# ``importlib`` at first attribute access, so there is no *static* edge
+# for tach to see — ``depends_on`` is empty by construction.
 
 [[modules]]
 path = "terok_clearance"
 layer = "interface"
-depends_on = [
-    "terok_clearance.commands",
-]
+depends_on = []
 
 
 # ── Domain layer ────────────────────────────────────────────────────
