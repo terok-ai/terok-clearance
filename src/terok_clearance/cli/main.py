@@ -3,69 +3,40 @@
 
 """CLI entry point for ``terok-clearance-hub`` — desktop notification tools.
 
-Builds the argument parser from the [`COMMANDS`][terok_clearance.commands.COMMANDS] registry so the
-standalone CLI and the terok integration layer share a single source
-of truth for subcommand definitions.
+Wires the [`COMMANDS`][terok_clearance.commands.COMMANDS] registry into
+argparse via [`CommandTree`][terok_util.cli_types.CommandTree].  Passing
+the process ``argv`` into
+[`wire`][terok_util.cli_types.CommandTree.wire] makes dispatch lazy: only
+the invoked verb's module is imported, so ``terok-clearance-hub notify``
+pays for none of the hub / verdict / Textual verbs.
 """
 
 import argparse
-import asyncio
 import sys
 
-from terok_util import ArgDef
+from terok_util import CommandTree
 
 from terok_clearance.commands import COMMANDS
 
 
-def _add_arg(parser: argparse.ArgumentParser, arg: ArgDef) -> None:
-    """Register an [`ArgDef`][terok_util.cli_types.ArgDef] with an argparse parser."""
-    kwargs: dict = {}
-    if arg.help:
-        kwargs["help"] = arg.help
-    for field in ("type", "default", "action", "dest", "nargs"):
-        val = getattr(arg, field)
-        if val is not None:
-            kwargs[field] = val
-    # Support multiple flag names separated by "/" (e.g. "-t/--timeout")
-    names = arg.name.split("/")
-    parser.add_argument(*names, **kwargs)
-
-
-def _build_parser() -> argparse.ArgumentParser:
-    """Build the top-level argument parser from the command registry."""
+def main() -> None:
+    """Entry point for ``terok-clearance-hub``."""
+    argv = sys.argv[1:]
     parser = argparse.ArgumentParser(
         prog="terok-clearance-hub",
         description="Desktop notification tools for the terok ecosystem.",
     )
-    sub = parser.add_subparsers(dest="command")
+    CommandTree(COMMANDS).wire(parser, argv=argv)
 
-    for cmd in COMMANDS:
-        cmd_parser = sub.add_parser(cmd.name, help=cmd.help)
-        for arg in cmd.args:
-            _add_arg(cmd_parser, arg)
-
-    return parser
-
-
-def main() -> None:
-    """Entry point for ``terok-clearance-hub``."""
-    parser = _build_parser()
-    args = parser.parse_args()
-
-    cmd_lookup = {cmd.name: cmd for cmd in COMMANDS}
-    cmd_def = cmd_lookup.get(args.command)
-
-    if cmd_def is None or cmd_def.handler is None:
+    args = parser.parse_args(argv)
+    if not hasattr(args, "_cmd"):
         parser.print_help()
-        sys.exit(2)
-
-    # Build kwargs from parsed args, excluding the 'command' key
-    kwargs = {k: v for k, v in vars(args).items() if k != "command"}
+        raise SystemExit(2)
 
     try:
-        asyncio.run(cmd_def.handler(**kwargs))
+        CommandTree.dispatch(args)
     except KeyboardInterrupt:
-        sys.exit(130)
+        raise SystemExit(130) from None
 
 
 if __name__ == "__main__":

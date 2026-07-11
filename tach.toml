@@ -36,14 +36,15 @@ name = "domain"
 
 
 # ── Package root ────────────────────────────────────────────────────
-# Public re-exports from every feature sub-package.
+# Public re-exports from every feature sub-package, bound lazily via a
+# PEP 562 ``__getattr__``.  The re-export imports run through
+# ``importlib`` at first attribute access, so there is no *static* edge
+# for tach to see — ``depends_on`` is empty by construction.
 
 [[modules]]
 path = "terok_clearance"
 layer = "interface"
-depends_on = [
-    "terok_clearance.commands",
-]
+depends_on = []
 
 
 # ── Domain layer ────────────────────────────────────────────────────
@@ -180,13 +181,41 @@ path = "terok_clearance.cli.main"
 layer = "interface"
 depends_on = ["terok_clearance.commands"]
 
+# The registry holds only lazy roots — ``source`` strings, not imports —
+# so it pulls no verb module statically; each verb's real def is reached
+# through ``importlib`` at wire time.  No intra-package static edge.
 [[modules]]
 path = "terok_clearance.commands"
 layer = "interface"
-depends_on = ["terok_clearance.cli.terminal_clearance"]
+depends_on = []
 
 [[modules]]
 path = "terok_clearance.cli.terminal_clearance"
 layer = "interface"
 depends_on = [
 ]
+
+# ── Verb modules ────────────────────────────────────────────────────
+# One per top-level verb, resolved lazily from ``commands``.  Each pulls
+# its handler's implementation from a lower layer (implicit downward
+# dep); only the ``clearance`` verb reaches a same-layer sibling.
+
+[[modules]]
+path = "terok_clearance.cli.verbs.notify"
+layer = "interface"
+depends_on = []
+
+[[modules]]
+path = "terok_clearance.cli.verbs.serve"
+layer = "interface"
+depends_on = []
+
+[[modules]]
+path = "terok_clearance.cli.verbs.serve_verdict"
+layer = "interface"
+depends_on = []
+
+[[modules]]
+path = "terok_clearance.cli.verbs.clearance"
+layer = "interface"
+depends_on = ["terok_clearance.cli.terminal_clearance"]

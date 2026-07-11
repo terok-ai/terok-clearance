@@ -7,7 +7,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from terok_clearance.commands import COMMANDS, CommandDef, _handle_notify, _handle_serve
+from terok_clearance.cli.verbs.notify import _handle_notify
+from terok_clearance.cli.verbs.serve import _handle_serve
+from terok_clearance.commands import COMMANDS, CommandDef
 
 
 class TestCommandRegistry:
@@ -33,18 +35,23 @@ class TestCommandRegistry:
         names = {cmd.name for cmd in COMMANDS}
         assert "subscribe" not in names
 
-    def test_all_commands_have_handlers(self) -> None:
+    def test_all_roots_are_lazy(self) -> None:
+        """Every root is a lazy reference — building COMMANDS imports no verb module."""
         for cmd in COMMANDS:
-            assert cmd.handler is not None, f"{cmd.name} has no handler"
+            assert cmd.is_lazy, f"{cmd.name} is not a lazy root"
+
+    def test_all_roots_resolve_to_handlers(self) -> None:
+        for cmd in COMMANDS:
+            assert cmd.resolve().handler is not None, f"{cmd.name} resolves without a handler"
 
     def test_notify_has_summary_arg(self) -> None:
         notify = next(cmd for cmd in COMMANDS if cmd.name == "notify")
-        arg_names = [a.name for a in notify.args]
+        arg_names = [a.name for a in notify.resolve().args]
         assert "summary" in arg_names
 
     def test_serve_has_no_required_args(self) -> None:
         serve = next(cmd for cmd in COMMANDS if cmd.name == "serve")
-        assert len(serve.args) == 0
+        assert len(serve.resolve().args) == 0
 
 
 class TestHandleNotify:

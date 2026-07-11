@@ -232,15 +232,15 @@ class TestClearanceRegistryEntry:
         names = {cmd.name for cmd in COMMANDS}
         assert "clearance" in names
 
-    def test_clearance_has_handler(self) -> None:
-        """The clearance CommandDef has a handler."""
+    def test_clearance_resolves_to_a_handler(self) -> None:
+        """The clearance lazy root resolves to a CommandDef with a handler."""
         cmd = next(c for c in COMMANDS if c.name == "clearance")
-        assert cmd.handler is not None
+        assert cmd.resolve().handler is not None
 
     def test_clearance_has_no_args(self) -> None:
-        """The clearance command takes no CLI arguments."""
+        """The resolved clearance command takes no CLI arguments."""
         cmd = next(c for c in COMMANDS if c.name == "clearance")
-        assert cmd.args == ()
+        assert cmd.resolve().args == ()
 
 
 class TestRunLifecycle:
