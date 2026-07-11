@@ -13,16 +13,60 @@ import subprocess
 import sys
 
 
+def _run(code: str) -> str:
+    """Run *code* in a fresh interpreter and return its stripped stdout."""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
 def test_bare_import_pulls_no_transport_deps():
     """``import terok_clearance`` alone loads neither asyncvarlink nor dbus_fast."""
     probe = (
         "import sys, terok_clearance; "
         "print(sorted({'asyncvarlink', 'dbus_fast'} & set(sys.modules)))"
     )
-    result = subprocess.run(
-        [sys.executable, "-c", probe],
-        capture_output=True,
-        text=True,
-        check=True,
+    assert _run(probe) == "[]"
+
+
+def test_verb_help_imports_only_that_verb():
+    """``terok-clearance-hub notify --help`` loads the notify verb, no others."""
+    probe = (
+        "import sys, io, contextlib\n"
+        "sys.argv = ['terok-clearance-hub', 'notify', '--help']\n"
+        "import terok_clearance.cli.main as m\n"
+        "try:\n"
+        "    with contextlib.redirect_stdout(io.StringIO()):\n"
+        "        m.main()\n"
+        "except SystemExit:\n"
+        "    pass\n"
+        "loaded = [v for v in ('notify', 'serve', 'serve_verdict', 'clearance')\n"
+        "          if f'terok_clearance.cli.verbs.{v}' in sys.modules]\n"
+        "print(loaded)"
     )
-    assert result.stdout.strip() == "[]"
+    assert _run(probe) == "['notify']"
+
+
+def test_top_help_lists_all_verbs_without_importing_them():
+    """Bare ``--help`` lists every verb as a placeholder, importing none of them."""
+    probe = (
+        "import sys, io, contextlib\n"
+        "sys.argv = ['terok-clearance-hub', '--help']\n"
+        "import terok_clearance.cli.main as m\n"
+        "out = io.StringIO()\n"
+        "try:\n"
+        "    with contextlib.redirect_stdout(out):\n"
+        "        m.main()\n"
+        "except SystemExit:\n"
+        "    pass\n"
+        "text = out.getvalue()\n"
+        "listed = all(v in text for v in ('notify', 'serve', 'serve-verdict', 'clearance'))\n"
+        "imported = [v for v in ('notify', 'serve', 'serve_verdict', 'clearance')\n"
+        "            if f'terok_clearance.cli.verbs.{v}' in sys.modules]\n"
+        "print(listed, imported)"
+    )
+    assert _run(probe) == "True []"

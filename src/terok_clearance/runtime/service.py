@@ -3,7 +3,7 @@
 
 """Shared helpers for the standalone ``serve()`` entry points.
 
-The hub ([`terok_clearance.serve`][terok_clearance.serve]) and the
+The hub ([`terok_clearance.hub.server.serve`][terok_clearance.hub.server.serve]) and the
 verdict helper ([`terok_clearance.verdict.server.serve`][terok_clearance.verdict.server.serve])
 both expose ``serve()`` coroutines that drive the standalone CLI
 verbs (``terok-clearance-hub serve`` / ``serve-verdict``) used by
