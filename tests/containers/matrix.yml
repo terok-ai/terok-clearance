@@ -12,7 +12,7 @@
 image-prefix: terok-clearance-test
 flavor: dbus
 expect: [dbus-daemon]
-poetry-groups: [test]
+groups: [test]
 
 slots:
   debian12:
