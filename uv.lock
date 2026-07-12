@@ -1410,7 +1410,7 @@ requires-dist = [
     { name = "asyncvarlink", specifier = "==0.3.2" },
     { name = "dbus-fast", specifier = "~=4.3" },
     { name = "pyyaml", specifier = "~=6.0" },
-    { name = "terok-util", git = "https://github.com/sliwowitz/terok-util.git?rev=feat%2Fuv-port" },
+    { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.0a1/terok_util-0.3.0a1-py3-none-any.whl" },
 ]
 
 [package.metadata.requires-dev]
@@ -1442,12 +1442,22 @@ test = [
 
 [[package]]
 name = "terok-util"
-version = "0.2.2a2.dev53+g752a28c36"
-source = { git = "https://github.com/sliwowitz/terok-util.git?rev=feat%2Fuv-port#752a28c364240dbb74ca966e23b899cfaee28045" }
+version = "0.3.0a1"
+source = { url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.0a1/terok_util-0.3.0a1-py3-none-any.whl" }
 dependencies = [
     { name = "jinja2" },
     { name = "platformdirs" },
     { name = "ruamel-yaml" },
+]
+wheels = [
+    { url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.0a1/terok_util-0.3.0a1-py3-none-any.whl", hash = "sha256:b5b1e2132a6d4a1b50bcc35d566e0d462f3e7a8317ae2be162652a54885ed233" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jinja2", specifier = "~=3.1" },
+    { name = "platformdirs", specifier = "~=4.10" },
+    { name = "ruamel-yaml", specifier = "==0.19.1" },
 ]
 
 [[package]]
