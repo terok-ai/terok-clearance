@@ -10,7 +10,7 @@ make install-dev
 
 ### System dependencies
 
-Poetry pulls in `dbus-python` (used by `python-dbusmock` in the test
+uv pulls in `dbus-python` (used by `python-dbusmock` in the test
 suite for a private session bus).  It has no wheel and builds from
 source against the system D-Bus and GLib development headers, so
 those need to be installed before `make install-dev` — otherwise the

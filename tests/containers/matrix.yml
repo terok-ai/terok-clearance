@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Multi-distro test matrix for terok-clearance — declarative input to the
-# shared engine in terok-util.  Run with `poetry run terok-matrix` from
+# shared engine in terok-util.  Run with `uv run terok-matrix` from
 # the repo root (or `make test-matrix`).
 #
 # clearance is dbus/varlink-only — no podman inside the containers, so it
@@ -12,7 +12,7 @@
 image-prefix: terok-clearance-test
 flavor: dbus
 expect: [dbus-daemon]
-poetry-groups: [test]
+groups: [test]
 
 slots:
   debian12:

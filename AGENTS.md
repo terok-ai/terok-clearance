@@ -7,7 +7,7 @@
 ## Technology Stack
 
 - **Language**: Python 3.12+
-- **Package Manager**: Poetry
+- **Package Manager**: uv
 - **Testing**: pytest + pytest-asyncio with coverage
 - **Linting/Formatting**: ruff
 - **Module Boundaries**: tach (enforced in CI via `tach.toml`)
@@ -121,7 +121,7 @@ dep; same-layer / cross-feature deps must be explicit in
 - **Graceful fallback**: `create_notifier()` returns `NullNotifier` when D-Bus is unavailable
 - **Minimal changes**: Make surgical, focused changes
 - **Existing tests**: Never remove or modify unrelated tests
-- **Dependencies**: Use Poetry; runtime dependencies are `dbus-fast`, `asyncvarlink`, `pyyaml`, and `terok-util`
+- **Dependencies**: Use uv; runtime dependencies are `dbus-fast`, `asyncvarlink`, `pyyaml`, and `terok-util`
 - **Pre-1.0 external deps**: pin third-party `0.x` dependencies to an exact patch (`asyncvarlink==0.3.2`), not a `<0.y+1` range. Pre-1.0 projects routinely ship breaking changes in patch/minor bumps, so a floating range lets a fresh install pull an incompatible release. Bump the pin deliberately (and re-run the suite) rather than letting it float. This is a terok-stack-wide practice; our own `terok-*` siblings are exempt (we control their API and range-pin them per the stack's version-sync rules).
 
 ## Dependency Pinning & `pyproject.toml` Hygiene
@@ -147,10 +147,10 @@ version:
   the patch-series form is exactly right — do *not* exact-pin them (it
   would fight the multi-repo release/PR-chain flow).
 
-Dev / test / docs / tooling dependencies (the `[tool.poetry.group.*]` groups)
+Dev / test / docs / tooling dependencies (the `[dependency-groups]` tables)
 are **exempt** — they are not shipped to installers and exact-pinning them is
 an unwarranted maintenance burden the developers can absorb. After changing
-any pin, run `poetry lock` and commit `pyproject.toml` and `poetry.lock`
+any pin, run `uv lock` and commit `pyproject.toml` and `uv.lock`
 together.
 
 **Comment discipline in `pyproject.toml`.** The dependency tables stay
