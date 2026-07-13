@@ -795,22 +795,16 @@ wheels = [
 
 [[package]]
 name = "mkdocs-terok"
-version = "0.8.0a1"
-source = { url = "https://github.com/terok-ai/mkdocs-terok/releases/download/v0.8.0a1/mkdocs_terok-0.8.0a1-py3-none-any.whl" }
+version = "0.8.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "properdocs" },
     { name = "pyyaml" },
     { name = "squarify" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/4e/6d/e08338d59989ad22c53b7f6585034a4b51d5d5ca302afcac5fbe32fdd282/mkdocs_terok-0.8.0.tar.gz", hash = "sha256:00712dbf44fe16433275a71d6047cda1d9f30c448eec9126c87ec5eaf032d443", size = 135150, upload-time = "2026-07-13T17:09:39.192Z" }
 wheels = [
-    { url = "https://github.com/terok-ai/mkdocs-terok/releases/download/v0.8.0a1/mkdocs_terok-0.8.0a1-py3-none-any.whl", hash = "sha256:bdc1c1af8d8c3eb2e6e5e66b180830a29fddd91d06dfa4ae3e86bf06e3c79f04" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "properdocs", specifier = "~=1.6.7" },
-    { name = "pyyaml", specifier = "~=6.0" },
-    { name = "squarify", specifier = "==0.4.4" },
+    { url = "https://files.pythonhosted.org/packages/72/3b/5cd7275eabc16d22992547cbbbca03887e361925e604f899b4baf686084c/mkdocs_terok-0.8.0-py3-none-any.whl", hash = "sha256:0f4e04f0f806a86ff3c19ac4813bfe4ebd71fa9cb6fe4e08a033af087d2b5444", size = 42569, upload-time = "2026-07-13T17:09:38.026Z" },
 ]
 
 [[package]]
@@ -1410,7 +1404,7 @@ requires-dist = [
     { name = "asyncvarlink", specifier = "==0.3.2" },
     { name = "dbus-fast", specifier = "~=5.0" },
     { name = "pyyaml", specifier = "~=6.0" },
-    { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.0a7/terok_util-0.3.0a7-py3-none-any.whl" },
+    { name = "terok-util", specifier = "~=0.3.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -1429,7 +1423,7 @@ docs = [
     { name = "mkdocs-literate-nav", specifier = ">=0.6" },
     { name = "mkdocs-material", specifier = ">=9.7.6" },
     { name = "mkdocs-section-index", specifier = ">=0.3" },
-    { name = "mkdocs-terok", url = "https://github.com/terok-ai/mkdocs-terok/releases/download/v0.8.0a1/mkdocs_terok-0.8.0a1-py3-none-any.whl" },
+    { name = "mkdocs-terok", specifier = "~=0.8.0" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=0.26" },
     { name = "properdocs", specifier = ">=1.6.7" },
 ]
@@ -1442,22 +1436,16 @@ test = [
 
 [[package]]
 name = "terok-util"
-version = "0.3.0a7"
-source = { url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.0a7/terok_util-0.3.0a7-py3-none-any.whl" }
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jinja2" },
     { name = "platformdirs" },
     { name = "ruamel-yaml" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/e8/95/e46e3ea0a3e3fdaf12e88981a3157c37d4f372bc6034a3759ac08885c493/terok_util-0.3.0.tar.gz", hash = "sha256:f0c836312d98c0d06a3c660ea88af0d410fbd01305f4c5a277f28f36b5ed9bcb", size = 183780, upload-time = "2026-07-13T17:28:18.603Z" }
 wheels = [
-    { url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.0a7/terok_util-0.3.0a7-py3-none-any.whl", hash = "sha256:5591d5eeac101b7b42b7a896a601d628799b7d1fc1c5beeaa59bf7da43ac77b5" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "jinja2", specifier = "~=3.1" },
-    { name = "platformdirs", specifier = "~=4.10" },
-    { name = "ruamel-yaml", specifier = "==0.19.1" },
+    { url = "https://files.pythonhosted.org/packages/a0/27/879004d7d80aae7fb700d4ede0749465c151f766802db8d919fcea7ce613/terok_util-0.3.0-py3-none-any.whl", hash = "sha256:966c66ed4de17c18247c65ccb8dba45060e1bced804a305ec1794b30bd9a9f4e", size = 74989, upload-time = "2026-07-13T17:28:17.412Z" },
 ]
 
 [[package]]
