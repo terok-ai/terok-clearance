@@ -10,7 +10,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from dbus_fast import Message, MessageType
 from dbus_fast.aio import MessageBus
@@ -265,8 +265,8 @@ class DbusNotifier:
                 except Exception as exc:  # noqa: BLE001 — retry with next UID
                     last_exc = exc
             if bus is None:
-                assert last_exc is not None
-                raise last_exc
+                # candidate_uids is non-empty, so the loop ran and set last_exc.
+                raise cast(Exception, last_exc)
             try:
                 # Build the proxy from a hand-rolled XML — the
                 # spec-defined shape — instead of a runtime introspect
@@ -491,13 +491,13 @@ class DbusNotifier:
         don't have to branch on notifier kind.
         """
         await self.connect()
-        assert self._conn is not None  # connect() post-condition
+        conn = cast(_Connection, self._conn)  # connect() post-condition
 
         actions_flat: list[str] = []
         for action_id, label in actions:
             actions_flat.extend((action_id, label))
 
-        return await self._conn.interface.call_notify(
+        return await conn.interface.call_notify(
             self._app_name,
             replaces_id,
             app_icon or _default_app_icon(),
