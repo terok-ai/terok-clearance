@@ -1404,7 +1404,7 @@ requires-dist = [
     { name = "asyncvarlink", specifier = "==0.3.2" },
     { name = "dbus-fast", specifier = "~=5.0" },
     { name = "pyyaml", specifier = "~=6.0" },
-    { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a2/terok_util-0.3.1a2-py3-none-any.whl" },
+    { name = "terok-util", git = "https://github.com/sliwowitz/terok-util?rev=feat%2Fpull-always-podman3" },
 ]
 
 [package.metadata.requires-dev]
@@ -1436,22 +1436,12 @@ test = [
 
 [[package]]
 name = "terok-util"
-version = "0.3.1a2"
-source = { url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a2/terok_util-0.3.1a2-py3-none-any.whl" }
+version = "0.3.1a3.dev69+ge29c9c537"
+source = { git = "https://github.com/sliwowitz/terok-util?rev=feat%2Fpull-always-podman3#e29c9c5372e523da154378beb92631e33bfe9bf1" }
 dependencies = [
     { name = "jinja2" },
     { name = "platformdirs" },
     { name = "ruamel-yaml" },
-]
-wheels = [
-    { url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a2/terok_util-0.3.1a2-py3-none-any.whl", hash = "sha256:f0172db426bb5a0dd18e45d044453c231bd02e5cea82355ca370813aa6edee1f" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "jinja2", specifier = "~=3.1" },
-    { name = "platformdirs", specifier = "~=4.10" },
-    { name = "ruamel-yaml", specifier = "==0.19.1" },
 ]
 
 [[package]]
