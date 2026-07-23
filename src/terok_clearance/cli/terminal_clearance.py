@@ -20,6 +20,8 @@ import logging
 import signal
 import sys
 
+from terok_util import configure
+
 from terok_clearance.domain.events import VerdictAction
 from terok_clearance.notifications.callback import CallbackNotifier, Notification
 
@@ -156,9 +158,6 @@ class _TerminalClearance:
 
 async def run_clearance() -> None:
     """Entry point coroutine for the terminal clearance tool."""
-    logging.basicConfig(
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        level=logging.INFO,
-    )
+    configure(identifier="terok-clearance")
     app = _TerminalClearance()
     await app.run()

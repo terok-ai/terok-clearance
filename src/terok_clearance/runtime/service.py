@@ -23,16 +23,19 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
-import sys
+
+from terok_util import configure
 
 
 def configure_logging(level: int = logging.INFO) -> None:
-    """Send INFO-level logs to stderr so the launching process picks them up."""
-    logging.basicConfig(
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        level=level,
-        stream=sys.stderr,
-    )
+    """Route logs through the unified facility, always keeping stderr.
+
+    These ``serve()`` daemons are host processes whose stderr the launcher
+    reads, so ``stderr=True`` keeps that pipe fed even on a journald host
+    (where records also go to the journal).  On a non-systemd host it falls
+    back to that same stderr.
+    """
+    configure(identifier="terok-clearance-hub", level=level, stderr=True)
 
 
 async def wait_for_shutdown_signal() -> None:  # pragma: no cover — real signals
