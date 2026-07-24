@@ -83,6 +83,7 @@ pip install terok-clearance
 import asyncio
 from terok_clearance import create_notifier
 
+
 async def main():
     notifier = await create_notifier(app_name="terok")
     action_received = asyncio.Event()
@@ -100,6 +101,7 @@ async def main():
 
     await action_received.wait()
     await notifier.disconnect()
+
 
 asyncio.run(main())
 ```
