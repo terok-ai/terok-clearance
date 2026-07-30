@@ -68,7 +68,8 @@ the privileged exec path isolated.
   `EventSubscriber` — the subscriber API operator UIs build on
   (the TUI renders live verdicts through it)
 - **Multi-socket subscriber** — `MultiSocketSubscriber` multiplexes
-  every per-container hub socket under `$XDG_RUNTIME_DIR/terok/clearance/`
+  the per-container hub sockets at
+  `$XDG_RUNTIME_DIR/terok/clearance/<short_id>/hub.sock`
   so a single UI sees the union of every supervisor's event stream
 - **Embeddable verdict server** — `VerdictServer` for the
   per-container supervisor to compose alongside the hub
