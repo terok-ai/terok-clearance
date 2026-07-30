@@ -1404,7 +1404,7 @@ requires-dist = [
     { name = "asyncvarlink", specifier = "==0.3.2" },
     { name = "dbus-fast", specifier = "~=5.0" },
     { name = "pyyaml", specifier = "~=6.0" },
-    { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a4/terok_util-0.3.1a4-py3-none-any.whl" },
+    { name = "terok-util", git = "https://github.com/sliwowitz/terok-util.git?rev=feat%2Flandlock-fs-confinement" },
 ]
 
 [package.metadata.requires-dev]
@@ -1436,22 +1436,12 @@ test = [
 
 [[package]]
 name = "terok-util"
-version = "0.3.1a4"
-source = { url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a4/terok_util-0.3.1a4-py3-none-any.whl" }
+version = "0.3.1a5.dev88+g1e095db2b"
+source = { git = "https://github.com/sliwowitz/terok-util.git?rev=feat%2Flandlock-fs-confinement#1e095db2bfba84a96116e325c0be77d5494e3991" }
 dependencies = [
     { name = "jinja2" },
     { name = "platformdirs" },
     { name = "ruamel-yaml" },
-]
-wheels = [
-    { url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a4/terok_util-0.3.1a4-py3-none-any.whl", hash = "sha256:8878f21e8101c5d70e17c7c44737ea5ea1390226738c0e9221f91d7dedfb38b3" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "jinja2", specifier = "~=3.1" },
-    { name = "platformdirs", specifier = "~=4.10" },
-    { name = "ruamel-yaml", specifier = "==0.19.1" },
 ]
 
 [[package]]

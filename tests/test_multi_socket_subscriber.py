@@ -4,7 +4,7 @@
 """Tests for [`MultiSocketSubscriber`][terok_clearance.MultiSocketSubscriber] — fan-in.
 
 The subscriber watches a filesystem glob (default
-``$XDG_RUNTIME_DIR/terok/clearance/*.sock``), opens an
+``$XDG_RUNTIME_DIR/terok/clearance/*/hub.sock``), opens an
 [`EventSubscriber`][terok_clearance.EventSubscriber] per matching path
 on `start`, and rescans periodically so newly-started supervisors
 join the merged stream without restart.  Tests inject a stub
@@ -308,8 +308,11 @@ class TestDefaultSocketGlob:
         stub_event_subscriber: dict[str, MagicMock],
     ) -> None:
         runtime = tmp_path / "runtime"
-        (runtime / "terok" / "clearance").mkdir(parents=True)
-        sock = _write_socket(runtime / "terok" / "clearance", "deadbeef.sock")
+        clearance_root = runtime / "terok" / "clearance"
+        container_lane = clearance_root / "deadbeef"
+        container_lane.mkdir(parents=True)
+        sock = _write_socket(container_lane, "hub.sock")
+        stale_flat_socket = _write_socket(clearance_root, "deadbeef.sock")
         monkeypatch.setenv("XDG_RUNTIME_DIR", str(runtime))
         notifier = MagicMock()
 
@@ -320,3 +323,4 @@ class TestDefaultSocketGlob:
             await sub.stop()
 
         assert str(sock) in stub_event_subscriber
+        assert str(stale_flat_socket) not in stub_event_subscriber

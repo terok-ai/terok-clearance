@@ -644,25 +644,27 @@ def _default_socket_glob() -> str:
     """Return the canonical per-container hub-socket glob.
 
     Resolves ``$XDG_RUNTIME_DIR`` (falling back to ``/run/user/<uid>``)
-    and appends the per-container supervisor layout ``terok/clearance/*.sock``.
+    and appends the per-container supervisor layout
+    ``terok/clearance/*/hub.sock``.
     Kept module-local because every call site that needs the default
     today is in this file; promoting it to `terok_clearance.wire.socket`
     would force a wire-layer dependency on the subscriber's runtime
     discovery shape.
     """
     xdg = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
-    return str(Path(xdg) / "terok" / "clearance" / "*.sock")
+    return str(Path(xdg) / "terok" / "clearance" / "*" / "hub.sock")
 
 
 class MultiSocketSubscriber:
     """Subscribe to every per-container clearance hub socket under a glob.
 
     The per-container-supervisor model gives every container its own
-    hub socket at ``$XDG_RUNTIME_DIR/terok/clearance/<container_id>.sock``,
+    hub socket at
+    ``$XDG_RUNTIME_DIR/terok/clearance/<short_id>/hub.sock``,
     so an operator UI that wants the union of every supervisor's
     event stream must multiplex across the set.  This class watches
     *socket_glob* (default
-    ``$XDG_RUNTIME_DIR/terok/clearance/*.sock``), opens an
+    ``$XDG_RUNTIME_DIR/terok/clearance/*/hub.sock``), opens an
     [`EventSubscriber`][terok_clearance.EventSubscriber] against each
     matching path on [`start`][terok_clearance.client.subscriber.MultiSocketSubscriber.start],
     re-scans every *rescan_interval_s* seconds to pick up sockets that
@@ -681,7 +683,7 @@ class MultiSocketSubscriber:
             notifier so the operator sees one merged stream.
         socket_glob: Filesystem glob of clearance hub sockets to track.
             ``None`` (the default) derives
-            ``$XDG_RUNTIME_DIR/terok/clearance/*.sock`` from the
+            ``$XDG_RUNTIME_DIR/terok/clearance/*/hub.sock`` from the
             current runtime dir.
         enabled_categories: Subset of
             [`ALL_NOTIFY_CATEGORIES`][terok_clearance.client.subscriber.ALL_NOTIFY_CATEGORIES]
