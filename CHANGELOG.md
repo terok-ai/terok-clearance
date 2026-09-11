@@ -1,4 +1,13 @@
 # Changelog
+## v0.8.0 — Past Prologue
+
+## What's Changed
+* Route logging through terok-util unified facility by @sliwowitz in https://github.com/terok-ai/terok-clearance/pull/214
+* Add the Manjaro (AppArmor) matrix slot by @sliwowitz in https://github.com/terok-ai/terok-clearance/pull/232
+
+
+**Full Changelog**: https://github.com/terok-ai/terok-clearance/compare/v0.7.3...v0.8.0
+
 ## v0.7.3 — The Celestial Temple
 
 * In-namespace bus auth; non-systemd + Mageia slots, https://github.com/terok-ai/terok-clearance/pull/173
