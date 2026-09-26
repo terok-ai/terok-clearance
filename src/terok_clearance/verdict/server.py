@@ -21,7 +21,6 @@ import asyncio
 import contextlib
 import logging
 import os
-import shutil
 import sys
 from collections.abc import Callable
 from contextlib import AbstractContextManager
@@ -29,6 +28,7 @@ from pathlib import Path
 
 from asyncvarlink import VarlinkInterfaceRegistry, VarlinkUnixServer, create_unix_server
 from asyncvarlink.serviceinterface import VarlinkServiceInterface
+from terok_util import find_host_tool
 
 from terok_clearance.verdict.interface import Verdict1Interface
 from terok_clearance.verdict.socket import default_verdict_socket_path
@@ -103,7 +103,7 @@ async def run_shield(
 def find_shield_binary() -> str | None:
     """Locate ``terok-shield`` — sibling venv first, then PATH, then ``None``.
 
-    The sibling check handles the pipx / poetry case where terok-shield
+    The sibling check handles the pipx / uv case where terok-shield
     ships in the same venv as terok-clearance; we prefer it over PATH
     so a shell-rc ``PATH`` shim can't redirect verdicts through a
     different installation.  ``is_file`` alone would happily return a
@@ -114,7 +114,7 @@ def find_shield_binary() -> str | None:
     sibling = Path(sys.executable).parent / "terok-shield"
     if sibling.is_file() and os.access(sibling, os.X_OK):
         return str(sibling)
-    return shutil.which("terok-shield")
+    return find_host_tool("terok-shield")
 
 
 class VerdictServer:

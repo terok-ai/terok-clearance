@@ -1,4 +1,9 @@
 # Changelog
+
+## [Unreleased] — 0.8.1
+
+- Use shared host-PATH lookup while preserving installation-bound Shield companions.
+
 ## v0.8.0 — Past Prologue
 
 ## What's Changed
