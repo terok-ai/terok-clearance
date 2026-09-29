@@ -4,6 +4,13 @@
 
 - Use shared host-PATH lookup while preserving installation-bound Shield companions.
 
+## v0.8.1 — At Your Service
+
+## What's Changed
+* fix: align host tool discovery by @sliwowitz in https://github.com/terok-ai/terok-clearance/pull/248
+
+**Full Changelog**: https://github.com/terok-ai/terok-clearance/compare/v0.8.0...v0.8.1
+
 ## v0.8.0 — Past Prologue
 
 ## What's Changed
