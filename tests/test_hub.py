@@ -481,3 +481,98 @@ class TestStartRollback:
         ingester.stop.assert_awaited_once()
         assert hub._ingester is None
         assert hub._varlink_server is None
+
+
+# ── Mute: who is asked, not what the shield did ───────────────────────
+
+
+def _reader_pending(container: str = CONTAINER, request_id: str = f"{CONTAINER}:1") -> dict:
+    """One reader ``pending`` dict, the shape the ingester delivers."""
+    return {
+        "type": "pending",
+        "container": container,
+        "id": request_id,
+        "dest": DEST_IP,
+        "port": 443,
+        "proto": 6,
+        "domain": DOMAIN,
+    }
+
+
+class TestMute:
+    """A muted container's refusals stop reaching the operator, and nothing else changes."""
+
+    @pytest.mark.asyncio
+    async def test_muted_container_raises_no_prompt(self) -> None:
+        """The blocked event is dropped before fan-out."""
+        hub = _hub()
+        q: asyncio.Queue = asyncio.Queue(maxsize=4)
+        hub._subscribers.add(q)
+
+        assert await hub._set_mute(CONTAINER, True) is True
+        await hub._relay_reader_event(_reader_pending())
+
+        assert q.empty()
+
+    @pytest.mark.asyncio
+    async def test_muted_container_binds_no_verdict(self) -> None:
+        """A request nobody was shown must not wait in the authz map for an answer."""
+        hub = _hub()
+        hub._subscribers.add(asyncio.Queue(maxsize=4))
+
+        await hub._set_mute(CONTAINER, True)
+        await hub._relay_reader_event(_reader_pending())
+
+        assert hub._live_verdicts == {}
+
+    @pytest.mark.asyncio
+    async def test_unmuting_brings_the_prompts_back(self) -> None:
+        """Mute is reversible, and the next refusal prompts again."""
+        hub = _hub()
+        q: asyncio.Queue = asyncio.Queue(maxsize=4)
+        hub._subscribers.add(q)
+
+        await hub._set_mute(CONTAINER, True)
+        await hub._relay_reader_event(_reader_pending())
+        assert await hub._set_mute(CONTAINER, False) is False
+        await hub._relay_reader_event(_reader_pending(request_id=f"{CONTAINER}:2"))
+
+        event = q.get_nowait()
+        assert event.request_id == f"{CONTAINER}:2"
+
+    @pytest.mark.asyncio
+    async def test_mute_is_per_container(self) -> None:
+        """Muting one task says nothing about another's refusals."""
+        hub = _hub()
+        q: asyncio.Queue = asyncio.Queue(maxsize=4)
+        hub._subscribers.add(q)
+
+        await hub._set_mute(CONTAINER, True)
+        await hub._relay_reader_event(
+            _reader_pending(container="other-ctr", request_id="other-ctr:1")
+        )
+
+        assert q.get_nowait().container == "other-ctr"
+
+    @pytest.mark.asyncio
+    async def test_lifecycle_events_are_never_muted(self) -> None:
+        """Mute covers the Allow/Deny question; it does not blind the operator."""
+        hub = _hub()
+        q: asyncio.Queue = asyncio.Queue(maxsize=4)
+        hub._subscribers.add(q)
+
+        await hub._set_mute(CONTAINER, True)
+        await hub._relay_reader_event({"type": "shield_down", "container": CONTAINER})
+
+        assert q.get_nowait().type == "shield_down"
+
+    @pytest.mark.asyncio
+    async def test_a_container_that_exits_keeps_no_mute(self) -> None:
+        """Mute is per running container — a recreated task starts audible."""
+        hub = _hub()
+        hub._subscribers.add(asyncio.Queue(maxsize=4))
+
+        await hub._set_mute(CONTAINER, True)
+        await hub._relay_reader_event({"type": "container_exited", "container": CONTAINER})
+
+        assert CONTAINER not in hub._muted

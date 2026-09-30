@@ -324,3 +324,48 @@ class TestDefaultSocketGlob:
 
         assert str(sock) in stub_event_subscriber
         assert str(stale_flat_socket) not in stub_event_subscriber
+
+
+class TestSetMute:
+    """Mute is addressed to one container's hub, found by the directory it sits in.
+
+    The supervisor lays sockets out as ``<runtime>/clearance/<short_id>/hub.sock``,
+    so the container id is the socket's parent directory, not its name.
+    """
+
+    @staticmethod
+    def _hub_socket(root: Path, container_id: str) -> Path:
+        """Create ``<root>/<container_id>/hub.sock``, the supervisor's layout."""
+        directory = root / container_id
+        directory.mkdir()
+        return _write_socket(directory, "hub.sock")
+
+    async def test_mute_routes_to_the_matching_socket(
+        self, tmp_path: Path, stub_event_subscriber: dict[str, MagicMock]
+    ) -> None:
+        """The hub under the container's own directory gets the call; the others do not."""
+        target = self._hub_socket(tmp_path, "ctr-a")
+        other = self._hub_socket(tmp_path, "ctr-b")
+        sub = MultiSocketSubscriber(MagicMock(), socket_glob=str(tmp_path / "*" / "hub.sock"))
+        try:
+            await sub.start()
+            for path in (target, other):
+                stub_event_subscriber[str(path)].set_mute = AsyncMock(return_value=True)
+
+            assert await sub.set_mute("ctr-a", "task-container", True) is True
+        finally:
+            await sub.stop()
+
+        stub_event_subscriber[str(target)].set_mute.assert_awaited_once_with("task-container", True)
+        stub_event_subscriber[str(other)].set_mute.assert_not_awaited()
+
+    async def test_mute_without_a_socket_reports_no_change(
+        self, tmp_path: Path, stub_event_subscriber: dict[str, MagicMock]
+    ) -> None:
+        """A task whose supervisor has gone cannot be muted, and the caller is told so."""
+        sub = MultiSocketSubscriber(MagicMock(), socket_glob=str(tmp_path / "*" / "hub.sock"))
+        try:
+            await sub.start()
+            assert await sub.set_mute("ctr-gone", "task-container", True) is False
+        finally:
+            await sub.stop()

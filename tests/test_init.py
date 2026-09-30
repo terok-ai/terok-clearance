@@ -21,6 +21,7 @@ class TestPublicApi:
             "COMMANDS",
             "CallbackNotifier",
             "ClearanceClient",
+            "set_container_mute",
             "ClearanceEvent",
             "ClearanceHub",
             "EventSubscriber",

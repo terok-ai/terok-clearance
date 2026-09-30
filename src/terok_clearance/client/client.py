@@ -40,6 +40,25 @@ _log = logging.getLogger(__name__)
 EventCallback = Callable[[ClearanceEvent], Awaitable[None]]
 
 
+async def set_container_mute(socket_path: Path, container: str, muted: bool) -> bool:
+    """Mute or unmute one container's prompts over a single short-lived connection.
+
+    For callers with no live subscription — a CLI verb, a one-off action — that
+    want the RPC without the event stream `ClearanceClient.start` opens.  Returns
+    the state the hub now holds; a hub that cannot be reached raises, because a
+    one-shot caller has nothing else to tell the operator.
+    """
+    transport, proto = await connect_unix_varlink(VarlinkClientProtocol, str(socket_path))
+    try:
+        reply = await proto.make_proxy(Clearance1Interface).SetMute(
+            container=container, muted=muted
+        )
+    finally:
+        with contextlib.suppress(Exception):
+            transport.close()
+    return bool(reply.get("muted", muted))
+
+
 class ClearanceClient:
     """Thin async client for the Clearance1 varlink service.
 
@@ -183,6 +202,24 @@ class ClearanceClient:
             return False
         # reply is {"ok": bool} per the return_parameter wrapper.
         return bool(reply.get("ok", False))
+
+    async def set_mute(self, container: str, muted: bool) -> bool:
+        """Mute or unmute *container*'s prompts via the hub's ``SetMute`` RPC.
+
+        Returns the mute state the hub now holds, or the state that was asked
+        for when the call could not be made — the caller's UI should not claim
+        a change the hub never heard, so a failure is logged at WARNING and
+        reported as unchanged (``not muted``).
+        """
+        if self._rpc_proxy is None:
+            _log.error("set_mute() called before start()")
+            return not muted
+        try:
+            reply = await self._rpc_proxy.SetMute(container=container, muted=muted)
+        except VarlinkErrorReply as err:
+            _log.warning("SetMute refused for %s (muted=%s): %s", container, muted, err)
+            return not muted
+        return bool(reply.get("muted", muted))
 
     async def _run_stream(self) -> None:
         """Pump Subscribe() events into the user callback, reconnecting on drop.

@@ -68,6 +68,11 @@ sees one merged stream.
   `NullNotifier` when D-Bus is unavailable (headless, container, CI)
 - **Protocol-based** — consumers type-hint against `Notifier`
   (PEP 544 Protocol)
+- **Mute without fail-open** — `SetMute(container, muted)` stops the
+  Allow/Deny prompts for one container.  The refusal already happened in
+  the kernel and the reader still records it in the container's audit
+  log; muting changes who is asked, never what the shield did.  Nothing
+  is auto-allowed, and a hub restart brings the prompts back
 
 ## Quick start
 

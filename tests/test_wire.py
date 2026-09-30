@@ -113,13 +113,19 @@ class TestTypedErrors:
 
 
 class TestInterfaceShape:
-    """Ensure the interface class keeps the two methods varlinkctl expects."""
+    """Ensure the interface class keeps the methods varlinkctl expects."""
 
     def test_interface_name(self) -> None:
         """The class attaches the well-known ``org.terok.Clearance1`` name."""
         assert Clearance1Interface.name == CLEARANCE_INTERFACE_NAME
 
     def test_interface_has_subscribe_and_verdict(self) -> None:
-        """Both RPC methods survive the decorator pass as callables."""
+        """Every RPC method survives the decorator pass as a callable."""
         assert callable(Clearance1Interface.Subscribe)
         assert callable(Clearance1Interface.Verdict)
+        assert callable(Clearance1Interface.SetMute)
+
+    def test_set_mute_renders_in_the_idl(self) -> None:
+        """``varlinkctl`` introspection shows the mute method with its real types."""
+        idl = Clearance1Interface.render_interface_description(comments=False)
+        assert "method SetMute(container: string, muted: bool) -> (muted: bool)" in idl
