@@ -117,6 +117,10 @@ class ClearanceHub:
         # request_id → (container, dest) the hub emitted in the matching
         # ConnectionBlocked; Verdict calls must cite a triple that matches.
         self._live_verdicts: dict[str, tuple[str, str]] = {}
+        # Containers whose refusals reach the audit log but not the operator.
+        # In memory on purpose: a hub restart means the prompts come back,
+        # which is the safe direction for a state nobody can see from outside.
+        self._muted: set[str] = set()
 
         self._ingester: EventIngester | None = None
         self._varlink_server: VarlinkUnixServer | None = None
@@ -142,6 +146,7 @@ class ClearanceHub:
                 Clearance1Interface(
                     event_stream_factory=self._subscribe,
                     apply_verdict=self._apply_verdict,
+                    set_mute=self._set_mute,
                 )
             )
             registry.register_interface(
@@ -223,8 +228,30 @@ class ClearanceHub:
         except (KeyError, ValueError, TypeError) as exc:
             _log.warning("dropping malformed reader event %r: %s", raw, exc)
             return
+        if event.type == "connection_blocked" and event.container in self._muted:
+            # The shield already refused this connection and the reader already
+            # recorded it; muting drops the question, nothing else.  Dropped
+            # before the verdict binding too — a request nobody is shown must
+            # not sit in the map waiting for an answer that cannot come.
+            _log.debug("muted: dropping prompt for %s → %s", event.container, event.dest)
+            return
         self._update_live_verdicts(event)
         self._fan_out(event)
+
+    async def _set_mute(self, container: str, muted: bool) -> bool:
+        """Start or stop dropping *container*'s prompts; returns the state in force.
+
+        Muting is not a verdict.  It never allows anything and never denies
+        anything: the refusal happened in the kernel before the hub saw the
+        event, and the audit record is written by the reader either way.  What
+        changes is whether an operator is asked about it.
+        """
+        if muted:
+            self._muted.add(container)
+        else:
+            self._muted.discard(container)
+        _log.info("clearance prompts %s for %s", "muted" if muted else "unmuted", container)
+        return muted
 
     def _update_live_verdicts(self, event: ClearanceEvent) -> None:
         """Maintain the authz-binding map in lockstep with the event stream.
@@ -249,6 +276,8 @@ class ClearanceHub:
             ]
             for rid in stale:
                 self._live_verdicts.pop(rid, None)
+            if event.type == "container_exited":
+                self._muted.discard(event.container)
 
     def _fan_out(self, event: ClearanceEvent) -> None:
         """Push *event* to every subscriber queue, dropping oldest on overflow.

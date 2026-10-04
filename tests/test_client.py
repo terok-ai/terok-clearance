@@ -22,7 +22,8 @@ import json
 import socket
 from collections.abc import AsyncIterator
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -397,3 +398,87 @@ async def test_start_rollback_on_partial_connect_failure(tmp_path: Path) -> None
     assert c._rpc_transport is None
     assert first_transport is not None
     first_transport.close.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_set_mute_stops_the_prompts_end_to_end(
+    hub: ClearanceHub, client: tuple[ClearanceClient, list]
+) -> None:
+    """A muted container's refusal never reaches the subscriber; unmuting restores it."""
+    c, received = client
+
+    assert await c.set_mute(CONTAINER, True) is True
+    _emit_reader_event(
+        hub._reader_socket,
+        {
+            "type": "pending",
+            "container": CONTAINER,
+            "id": f"{CONTAINER}:1",
+            "dest": DEST_IP,
+            "port": 443,
+            "proto": 6,
+            "domain": DOMAIN,
+        },
+    )
+    await asyncio.sleep(0.1)
+    assert [e for e in received if e.type == "connection_blocked"] == []
+
+    assert await c.set_mute(CONTAINER, False) is False
+    _emit_reader_event(
+        hub._reader_socket,
+        {
+            "type": "pending",
+            "container": CONTAINER,
+            "id": f"{CONTAINER}:2",
+            "dest": DEST_IP,
+            "port": 443,
+            "proto": 6,
+            "domain": DOMAIN,
+        },
+    )
+    await asyncio.sleep(0.1)
+    blocked = [e for e in received if e.type == "connection_blocked"]
+    assert [e.request_id for e in blocked] == [f"{CONTAINER}:2"]
+
+
+@pytest.mark.asyncio
+async def test_set_mute_before_start_reports_no_change() -> None:
+    """Without a connection the hub heard nothing, so the caller is not told it changed."""
+    c = ClearanceClient(socket_path=Path("/nonexistent/clearance.sock"))
+    assert await c.set_mute(CONTAINER, True) is False
+
+
+@pytest.mark.asyncio
+async def test_set_container_mute_needs_no_subscription(hub: ClearanceHub) -> None:
+    """The one-shot helper mutes over its own connection, with no event stream open."""
+    from terok_clearance import set_container_mute
+
+    assert await set_container_mute(hub._clearance_socket, CONTAINER, True) is True
+    assert CONTAINER in hub._muted
+    assert await set_container_mute(hub._clearance_socket, CONTAINER, False) is False
+    assert CONTAINER not in hub._muted
+
+
+@pytest.mark.asyncio
+async def test_set_mute_refused_by_the_hub_reports_no_change() -> None:
+    """A refused mute must not be reported as applied — the prompts are still coming."""
+    from asyncvarlink.error import VarlinkErrorReply
+
+    c = ClearanceClient(socket_path=Path("/nonexistent/clearance.sock"))
+    c._rpc_proxy = SimpleNamespace(
+        SetMute=AsyncMock(side_effect=VarlinkErrorReply("org.terok.Clearance1.Nope", {}))
+    )
+
+    assert await c.set_mute(CONTAINER, True) is False
+
+
+@pytest.mark.asyncio
+async def test_event_subscriber_hands_mute_to_its_client() -> None:
+    """``EventSubscriber`` owns one hub connection, so mute goes straight through it."""
+    from terok_clearance import EventSubscriber
+
+    client = SimpleNamespace(set_mute=AsyncMock(return_value=True))
+    subscriber = EventSubscriber(MagicMock(), client=client)  # type: ignore[arg-type]
+
+    assert await subscriber.set_mute(CONTAINER, True) is True
+    client.set_mute.assert_awaited_once_with(CONTAINER, True)

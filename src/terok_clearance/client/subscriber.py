@@ -300,6 +300,15 @@ class EventSubscriber:
         await self._client.start(self._on_event)
         _log.info("clearance subscriber online")
 
+    async def set_mute(self, container: str, muted: bool) -> bool:
+        """Mute or unmute *container*'s prompts on this subscriber's hub.
+
+        Returns the state in force.  Muting drops the prompt only: the
+        connection was already refused, and the audit record is written either
+        way.
+        """
+        return await self._client.set_mute(container, muted)
+
     async def stop(self) -> None:
         """Drain pending tasks and close the transport.
 
@@ -746,6 +755,22 @@ class MultiSocketSubscriber:
             self._socket_glob,
             len(self._subscribers),
         )
+
+    async def set_mute(self, container_id: str, container: str, muted: bool) -> bool:
+        """Mute or unmute one container's prompts, addressed by its socket id.
+
+        *container_id* selects the per-container hub — the directory the socket
+        sits in, which the supervisor names for the container's short id;
+        *container* is the name that hub knows the container by, which is what
+        its events carry.  A container with no live socket cannot be muted, and
+        says so by reporting the state unchanged rather than raising: the
+        supervisor may simply have exited.
+        """
+        for path, subscriber in self._subscribers.items():
+            if Path(path).parent.name == container_id:
+                return await subscriber.set_mute(container, muted)
+        _log.warning("no clearance socket for %s — mute not applied", container_id)
+        return not muted
 
     async def stop(self) -> None:
         """Cancel the rescan loop and stop every child subscriber.
