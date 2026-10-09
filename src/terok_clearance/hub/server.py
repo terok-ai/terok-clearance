@@ -23,6 +23,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
+import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractContextManager
 from pathlib import Path
@@ -52,6 +54,71 @@ _log = logging.getLogger(__name__)
 #: bounded also prevents a stuck client from pinning arbitrary memory.
 _SUBSCRIBER_QUEUE_DEPTH = 128
 
+#: Config-file key (under the ``clearance:`` section of
+#: ``~/.config/terok/config.yml``) holding the pending-verdict TTL.
+#: Human-readable duration (``24h``, ``30m``, ``7d``) or ``never``.
+VERDICT_TTL_CONFIG_KEY = "verdict_ttl"
+
+#: Default pending-verdict TTL: 24 hours.  Long enough for overnight
+#: tasks where the operator reviews in the morning; short enough that
+#: a long-running container doesn't accumulate unbounded state.
+#: ``never`` disables expiry (backward-compatible behaviour).
+_DEFAULT_VERDICT_TTL = 24 * 3600.0
+
+#: How often the background cleanup task scans for stale entries.
+_VERDICT_CLEANUP_INTERVAL = 300.0  # 5 minutes
+
+_TTL_RE = re.compile(r"^(\d+(?:\.\d+)?)\s*([smhd])?$", re.IGNORECASE)
+_TTL_UNITS = {"s": 1.0, "m": 60.0, "h": 3600.0, "d": 86400.0, None: 1.0}
+
+
+def parse_verdict_ttl(value: str | None) -> float | None:
+    """Parse a TTL string into seconds, or ``None`` for "no expiry".
+
+    Accepts plain seconds (``3600``), unit-suffixed (``24h``, ``30m``,
+    ``7d``), and the special values ``never`` / ``0`` / ``none`` (all
+    meaning "no expiry").  ``None`` input returns the default (24h).
+    Raises ``ValueError`` on malformed input.
+    """
+    if value is None:
+        return _DEFAULT_VERDICT_TTL
+    v = value.strip().lower()
+    if v in ("never", "none", "0", "off", "disabled"):
+        return None
+    m = _TTL_RE.fullmatch(v)
+    if not m:
+        raise ValueError(f"invalid TTL {value!r} (expected e.g. '3600', '24h', '30m', 'never')")
+    num = float(m.group(1))
+    unit = m.group(2)
+    return num * _TTL_UNITS[unit]
+
+
+def _read_verdict_ttl_from_config() -> float | None:
+    """Read the pending-verdict TTL from the terok config file.
+
+    Reads ``clearance.verdict_ttl`` from the layered terok config
+    (``/etc/terok/config.yml`` → ``~/.config/terok/config.yml``) via
+    terok-util's [`read_config_section`][terok_util.paths.read_config_section].
+    Returns the 24h default when the key is absent; ``None`` (no expiry)
+    when set to ``never``.
+
+    Fail-silent: any error reading or parsing the config falls back to
+    the default rather than crashing the hub.
+    """
+    try:
+        from terok_util.paths import read_config_section
+
+        raw = read_config_section("clearance").get(VERDICT_TTL_CONFIG_KEY)
+        if raw is None:
+            return _DEFAULT_VERDICT_TTL
+        return parse_verdict_ttl(raw)
+    except Exception:  # noqa: BLE001 — fail-silent; bad config must not crash the hub
+        _log.warning(
+            "failed to read clearance.verdict_ttl from config — using default", exc_info=True
+        )
+        return _DEFAULT_VERDICT_TTL
+
+
 #: Reader ``type`` → wire-level ``ClearanceEvent.type``.  Only one event
 #: renames (``pending → connection_blocked``); every other reader type
 #: flows through unchanged.  Kept as an explicit allowlist so unknown
@@ -66,6 +133,27 @@ _WIRE_EVENT_TYPES: frozenset[str] = frozenset(
         "shield_disengaged",
     }
 )
+
+
+#: Sentinel type for ``ClearanceHub.__init__``'s ``verdict_ttl`` parameter —
+#: distinguishes "not passed" (read config/default) from "explicitly None"
+#: (disable expiry).  Using a dedicated class (rather than ``object()``)
+#: keeps mypy happy: the parameter type is a union that includes the
+#: sentinel, and the narrowing check ``is _UNSET`` is well-typed.
+class _Unset:
+    """Sentinel for "parameter not passed" — distinct from ``None``."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "<unset>"
+
+
+_UNSET = _Unset()
+
+#: Type alias for the ``verdict_ttl`` parameter: a TTL in seconds, ``None``
+#: to disable expiry, or the ``_UNSET`` sentinel to read from config.
+VerdictTtlParam = float | None | _Unset
 
 
 class ClearanceHub:
@@ -93,6 +181,7 @@ class ClearanceHub:
         reader_socket: Path | None = None,
         verdict_client: VerdictClient | None = None,
         socket_context: Callable[[], AbstractContextManager[None]] | None = None,
+        verdict_ttl: VerdictTtlParam = _UNSET,
     ) -> None:
         """Configure the two sockets and the verdict-helper client.
 
@@ -107,19 +196,52 @@ class ClearanceHub:
         terok-sandbox passes its SELinux ``setsockcreatecon`` helper here
         so the hub socket is labelled ``terok_socket_t`` and confined
         containers can ``connectto`` it.
+
+        *verdict_ttl* — seconds after which a pending ``connection_blocked``
+        entry is expired from the authz-binding map.  ``None`` means no
+        expiry (backward-compatible).  When not passed explicitly, the
+        value is read from the ``clearance.verdict_ttl`` key in the
+        layered terok config (``~/.config/terok/config.yml``); absent
+        falls back to a 24-hour default so long-running containers
+        don't accumulate unbounded state.  Pass ``verdict_ttl=None``
+        explicitly to disable expiry regardless of the config file.
+
+        Config file example::
+
+            clearance:
+              verdict_ttl: 24h   # or "never" to disable
         """
         self._clearance_socket = clearance_socket or default_clearance_socket_path()
         self._reader_socket = reader_socket  # None → EventIngester picks its default.
         self._verdict_client = verdict_client or VerdictClient()
         self._socket_context = socket_context
+        ttl: float | None
+        if verdict_ttl is _UNSET:
+            ttl = _read_verdict_ttl_from_config()
+        elif verdict_ttl is None:
+            ttl = None
+        elif isinstance(verdict_ttl, (int, float)):
+            ttl = float(verdict_ttl)
+        else:  # pragma: no cover — defensive; type narrowing should prevent this
+            ttl = _DEFAULT_VERDICT_TTL
+        self._verdict_ttl: float | None = ttl
 
         self._subscribers: set[asyncio.Queue[ClearanceEvent]] = set()
         # request_id → (container, dest) the hub emitted in the matching
         # ConnectionBlocked; Verdict calls must cite a triple that matches.
         self._live_verdicts: dict[str, tuple[str, str]] = {}
+        # request_id → monotonic timestamp when the entry was recorded;
+        # used by the background cleanup to expire stale entries.
+        self._live_verdicts_ts: dict[str, float] = {}
+        self._cleanup_task: asyncio.Task[None] | None = None
 
         self._ingester: EventIngester | None = None
         self._varlink_server: VarlinkUnixServer | None = None
+
+    @property
+    def verdict_ttl(self) -> float | None:
+        """Pending-verdict TTL in seconds, or ``None`` when expiry is disabled."""
+        return self._verdict_ttl
 
     # ── lifecycle ──────────────────────────────────────────────────────
 
@@ -170,7 +292,16 @@ class ClearanceHub:
                 await self._ingester.stop()
             self._ingester = None
             raise
-        _log.info("clearance hub online at %s", self._clearance_socket)
+        # Start the background cleanup task for stale verdict entries.
+        # Only runs when a TTL is configured; otherwise entries live until
+        # a verdict or lifecycle event removes them (backward-compatible).
+        if self._verdict_ttl is not None:
+            self._cleanup_task = asyncio.create_task(self._cleanup_loop())
+        _log.info(
+            "clearance hub online at %s (verdict_ttl=%s)",
+            self._clearance_socket,
+            f"{self._verdict_ttl}s" if self._verdict_ttl is not None else "never",
+        )
 
     async def stop(self) -> None:
         """Close the varlink server + ingester; drain subscriber queues."""
@@ -197,8 +328,14 @@ class ClearanceHub:
             self._ingester = None
         with contextlib.suppress(Exception):
             await self._verdict_client.stop()
+        if self._cleanup_task is not None:
+            self._cleanup_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._cleanup_task
+            self._cleanup_task = None
         self._subscribers.clear()
         self._live_verdicts.clear()
+        self._live_verdicts_ts.clear()
 
     # ── reader ingestion ───────────────────────────────────────────────
 
@@ -241,6 +378,7 @@ class ClearanceHub:
                 event.container,
                 event.domain or event.dest,
             )
+            self._live_verdicts_ts[event.request_id] = time.monotonic()
         elif event.type in {"shield_down", "shield_disengaged", "container_exited"}:
             stale = [
                 rid
@@ -249,6 +387,39 @@ class ClearanceHub:
             ]
             for rid in stale:
                 self._live_verdicts.pop(rid, None)
+                self._live_verdicts_ts.pop(rid, None)
+
+    def _cleanup_stale_verdicts(self) -> int:
+        """Expire pending-verdict entries older than the configured TTL.
+
+        Returns the number of entries removed.  No-op when expiry is
+        disabled (``verdict_ttl is None``).
+        """
+        if self._verdict_ttl is None:
+            return 0
+        now = time.monotonic()
+        stale = [rid for rid, ts in self._live_verdicts_ts.items() if now - ts > self._verdict_ttl]
+        for rid in stale:
+            self._live_verdicts.pop(rid, None)
+            self._live_verdicts_ts.pop(rid, None)
+        if stale:
+            _log.info(
+                "expired %d stale pending-verdict entries (ttl=%gs)",
+                len(stale),
+                self._verdict_ttl,
+            )
+        return len(stale)
+
+    async def _cleanup_loop(self) -> None:
+        """Periodically expire stale pending-verdict entries.
+
+        Runs until cancelled (hub shutdown).  The interval is deliberately
+        much shorter than any realistic TTL so entries expire close to
+        their deadline even if the hub is busy.
+        """
+        while True:
+            await asyncio.sleep(_VERDICT_CLEANUP_INTERVAL)
+            self._cleanup_stale_verdicts()
 
     def _fan_out(self, event: ClearanceEvent) -> None:
         """Push *event* to every subscriber queue, dropping oldest on overflow.
@@ -311,6 +482,7 @@ class ClearanceHub:
         if action not in VERDICT_ACTIONS:
             raise InvalidAction(action=action)
         live = self._live_verdicts.pop(request_id, None)
+        ts = self._live_verdicts_ts.pop(request_id, None)
         if live is None:
             raise UnknownRequest(request_id=request_id)
         expected_container, expected_dest = live
@@ -319,6 +491,8 @@ class ClearanceHub:
             # should still be accepted, so this call's mismatch mustn't
             # consume the entry.
             self._live_verdicts[request_id] = live
+            if ts is not None:
+                self._live_verdicts_ts[request_id] = ts
             raise VerdictTupleMismatch(
                 expected_container=expected_container,
                 expected_dest=expected_dest,
@@ -333,6 +507,8 @@ class ClearanceHub:
             # ``Verdict`` on the same ``request_id`` should still land on
             # the same ``(container, dest)`` pair.
             self._live_verdicts[request_id] = live
+            if ts is not None:
+                self._live_verdicts_ts[request_id] = ts
         # Republish the outcome on the event stream so every subscriber
         # (not just this caller) can flip its notification state.
         self._fan_out(

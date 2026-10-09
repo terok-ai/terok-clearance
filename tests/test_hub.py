@@ -218,9 +218,9 @@ class TestTranslateReaderEvent:
 # ── Live-verdict authz binding ────────────────────────────────────────
 
 
-def _hub() -> ClearanceHub:
+def _hub(**kwargs) -> ClearanceHub:
     """Build an unstarted hub — state maps are fine to test without sockets."""
-    return ClearanceHub()
+    return ClearanceHub(**kwargs)
 
 
 def _blocked(request_id: str = f"{CONTAINER}:1", *, domain: str = DOMAIN) -> ClearanceEvent:
@@ -481,3 +481,231 @@ class TestStartRollback:
         ingester.stop.assert_awaited_once()
         assert hub._ingester is None
         assert hub._varlink_server is None
+
+
+# ── Verdict TTL / expiry ──────────────────────────────────────────────
+
+
+class TestParseVerdictTtl:
+    """TTL string parsing."""
+
+    def test_none_uses_default(self) -> None:
+        """Unset env / None falls back to the 24h default."""
+        from terok_clearance.hub.server import _DEFAULT_VERDICT_TTL, parse_verdict_ttl
+
+        assert parse_verdict_ttl(None) == _DEFAULT_VERDICT_TTL
+
+    def test_plain_seconds(self) -> None:
+        from terok_clearance.hub.server import parse_verdict_ttl
+
+        assert parse_verdict_ttl("3600") == 3600.0
+
+    def test_unit_suffixes(self) -> None:
+        from terok_clearance.hub.server import parse_verdict_ttl
+
+        assert parse_verdict_ttl("30m") == 1800.0
+        assert parse_verdict_ttl("24h") == 86400.0
+        assert parse_verdict_ttl("7d") == 604800.0
+        assert parse_verdict_ttl("60s") == 60.0
+
+    def test_fractional(self) -> None:
+        from terok_clearance.hub.server import parse_verdict_ttl
+
+        assert parse_verdict_ttl("1.5h") == 5400.0
+
+    def test_never_disables_expiry(self) -> None:
+        from terok_clearance.hub.server import parse_verdict_ttl
+
+        for v in ("never", "none", "0", "off", "disabled"):
+            assert parse_verdict_ttl(v) is None, f"{v!r} should disable expiry"
+
+    def test_invalid_raises(self) -> None:
+        from terok_clearance.hub.server import parse_verdict_ttl
+
+        with pytest.raises(ValueError):
+            parse_verdict_ttl("abc")
+
+
+class TestVerdictTtlExpiry:
+    """Background cleanup of stale pending-verdict entries."""
+
+    def test_ttl_disabled_via_config_never(self, monkeypatch) -> None:
+        """clearance.verdict_ttl: never in config.yml disables expiry."""
+        monkeypatch.setattr(
+            "terok_clearance.hub.server._read_verdict_ttl_from_config",
+            lambda: None,
+        )
+        hub = _hub()
+        assert hub.verdict_ttl is None
+
+    def test_ttl_from_config(self, monkeypatch) -> None:
+        """TTL is read from the clearance.verdict_ttl config key."""
+        monkeypatch.setattr(
+            "terok_clearance.hub.server._read_verdict_ttl_from_config",
+            lambda: 3600.0,
+        )
+        hub = _hub()
+        assert hub.verdict_ttl == 3600.0
+
+    def test_explicit_ttl_overrides_config(self, monkeypatch) -> None:
+        """Constructor parameter takes precedence over config file."""
+        monkeypatch.setattr(
+            "terok_clearance.hub.server._read_verdict_ttl_from_config",
+            lambda: 3600.0,
+        )
+        from terok_clearance.hub.server import ClearanceHub
+
+        hub = ClearanceHub(verdict_ttl=60.0)
+        assert hub.verdict_ttl == 60.0
+
+    def test_config_read_failure_falls_back_to_default(self, monkeypatch) -> None:
+        """Config read failure falls back to the 24h default."""
+        from terok_clearance.hub.server import _DEFAULT_VERDICT_TTL, ClearanceHub
+
+        monkeypatch.setattr(
+            "terok_clearance.hub.server._read_verdict_ttl_from_config",
+            lambda: _DEFAULT_VERDICT_TTL,
+        )
+        hub = ClearanceHub()
+        assert hub.verdict_ttl == _DEFAULT_VERDICT_TTL
+
+    def test_cleanup_removes_stale_entries(self) -> None:
+        """Entries older than the TTL are removed by cleanup."""
+        import time
+
+        hub = _hub(verdict_ttl=1.0)  # 1 second TTL
+        hub._update_live_verdicts(_blocked(f"{CONTAINER}:1"))
+        hub._update_live_verdicts(_blocked(f"{CONTAINER}:2"))
+        assert len(hub._live_verdicts) == 2
+
+        # Backdate the first entry
+        hub._live_verdicts_ts[f"{CONTAINER}:1"] = time.monotonic() - 2.0
+
+        removed = hub._cleanup_stale_verdicts()
+        assert removed == 1
+        assert f"{CONTAINER}:1" not in hub._live_verdicts
+        assert f"{CONTAINER}:2" in hub._live_verdicts
+
+    def test_cleanup_keeps_fresh_entries(self) -> None:
+        """Entries newer than the TTL are kept."""
+        hub = _hub(verdict_ttl=3600.0)  # 1 hour TTL
+        hub._update_live_verdicts(_blocked())
+        removed = hub._cleanup_stale_verdicts()
+        assert removed == 0
+        assert len(hub._live_verdicts) == 1
+
+    def test_cleanup_noop_when_ttl_disabled(self) -> None:
+        """Cleanup is a no-op when expiry is disabled."""
+        import time
+
+        hub = _hub(verdict_ttl=None)
+        hub._update_live_verdicts(_blocked())
+        # Backdate the entry
+        hub._live_verdicts_ts[f"{CONTAINER}:1"] = time.monotonic() - 999999.0
+        removed = hub._cleanup_stale_verdicts()
+        assert removed == 0
+        assert len(hub._live_verdicts) == 1
+
+    def test_timestamps_removed_on_lifecycle_purge(self) -> None:
+        """Lifecycle events remove both the binding and its timestamp."""
+        hub = _hub(verdict_ttl=3600.0)
+        hub._update_live_verdicts(_blocked(f"{CONTAINER}:1"))
+        assert f"{CONTAINER}:1" in hub._live_verdicts_ts
+        hub._update_live_verdicts(ClearanceEvent(type="shield_down", container=CONTAINER))
+        assert f"{CONTAINER}:1" not in hub._live_verdicts
+        assert f"{CONTAINER}:1" not in hub._live_verdicts_ts
+
+    def test_timestamps_removed_on_verdict(self) -> None:
+        """A successful verdict removes both the binding and its timestamp."""
+        hub = _hub(verdict_ttl=3600.0)
+        hub._verdict_client = AsyncMock()
+        hub._verdict_client.apply = AsyncMock(return_value=(True, ""))
+        hub._update_live_verdicts(_blocked())
+        rid = f"{CONTAINER}:1"
+        assert rid in hub._live_verdicts_ts
+
+        asyncio.run(hub._apply_verdict(CONTAINER, rid, DOMAIN, "allow"))
+        assert rid not in hub._live_verdicts
+        assert rid not in hub._live_verdicts_ts
+
+    def test_timestamp_preserved_on_verdict_mismatch(self) -> None:
+        """A mismatched verdict puts the entry back with its timestamp."""
+        hub = _hub(verdict_ttl=3600.0)
+        hub._update_live_verdicts(_blocked())
+        rid = f"{CONTAINER}:1"
+        original_ts = hub._live_verdicts_ts[rid]
+
+        with pytest.raises(VerdictTupleMismatch):
+            asyncio.run(hub._apply_verdict(CONTAINER, rid, "wrong-dest", "allow"))
+        assert rid in hub._live_verdicts
+        assert hub._live_verdicts_ts[rid] == original_ts
+
+
+class TestReadVerdictTtlFromConfig:
+    """Config-file reading for the pending-verdict TTL."""
+
+    def test_absent_key_returns_default(self, monkeypatch) -> None:
+        """No clearance.verdict_ttl key → 24h default."""
+        from terok_clearance.hub.server import _DEFAULT_VERDICT_TTL, _read_verdict_ttl_from_config
+
+        monkeypatch.setattr(
+            "terok_util.paths.read_config_section",
+            lambda section: {},
+        )
+        assert _read_verdict_ttl_from_config() == _DEFAULT_VERDICT_TTL
+
+    def test_parses_duration_string(self, monkeypatch) -> None:
+        """Config value '1h' → 3600 seconds."""
+        from terok_clearance.hub.server import _read_verdict_ttl_from_config
+
+        monkeypatch.setattr(
+            "terok_util.paths.read_config_section",
+            lambda section: {"verdict_ttl": "1h"} if section == "clearance" else {},
+        )
+        assert _read_verdict_ttl_from_config() == 3600.0
+
+    def test_never_disables_expiry(self, monkeypatch) -> None:
+        """Config value 'never' → None (no expiry)."""
+        from terok_clearance.hub.server import _read_verdict_ttl_from_config
+
+        monkeypatch.setattr(
+            "terok_util.paths.read_config_section",
+            lambda section: {"verdict_ttl": "never"} if section == "clearance" else {},
+        )
+        assert _read_verdict_ttl_from_config() is None
+
+    def test_invalid_value_falls_back_to_default(self, monkeypatch) -> None:
+        """Invalid config value → 24h default (fail-silent)."""
+        from terok_clearance.hub.server import _DEFAULT_VERDICT_TTL, _read_verdict_ttl_from_config
+
+        monkeypatch.setattr(
+            "terok_util.paths.read_config_section",
+            lambda section: {"verdict_ttl": "garbage"} if section == "clearance" else {},
+        )
+        assert _read_verdict_ttl_from_config() == _DEFAULT_VERDICT_TTL
+
+    def test_read_failure_falls_back_to_default(self, monkeypatch) -> None:
+        """Config read exception → 24h default (fail-silent)."""
+        from terok_clearance.hub.server import _DEFAULT_VERDICT_TTL, _read_verdict_ttl_from_config
+
+        def _boom(section: str) -> dict:
+            raise RuntimeError("config unreadable")
+
+        monkeypatch.setattr("terok_util.paths.read_config_section", _boom)
+        assert _read_verdict_ttl_from_config() == _DEFAULT_VERDICT_TTL
+
+    def test_timestamp_preserved_on_shield_failure(self) -> None:
+        """A failed shield call restores the binding with its original timestamp."""
+        hub = _hub(verdict_ttl=3600.0)
+        hub._verdict_client = AsyncMock()
+        hub._verdict_client.apply = AsyncMock(return_value=(False, "shield failed"))
+        hub._update_live_verdicts(_blocked())
+        rid = f"{CONTAINER}:1"
+        original_ts = hub._live_verdicts_ts[rid]
+
+        with pytest.raises(ShieldCliFailed):
+            asyncio.run(hub._apply_verdict(CONTAINER, rid, DOMAIN, "allow"))
+
+        # Binding and timestamp are restored for retry
+        assert rid in hub._live_verdicts
+        assert hub._live_verdicts_ts[rid] == original_ts
