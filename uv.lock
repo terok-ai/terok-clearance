@@ -72,11 +72,11 @@ wheels = [
 
 [[package]]
 name = "asyncvarlink"
-version = "0.3.2"
+version = "0.3.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/77/03/62b78310e769c08f96ffb2b0019e51315942a94bf30a41a22a9a1e2fcf85/asyncvarlink-0.3.2.tar.gz", hash = "sha256:80906780cc4fa786aeb05e5858f02326147eb14ffe752317b4e647fc51ed28a5", size = 60245, upload-time = "2026-06-25T05:41:12.918Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/59/88/afd4b0f85e966ffbedbd46f6e362fe0227d8e0e94763992b06fbef0b014d/asyncvarlink-0.3.3.tar.gz", hash = "sha256:0270e352d5c8d5348b90f547a4215bfb37a6b829b84341822f80273e830dadd4", size = 61619, upload-time = "2026-10-09T10:43:37.909Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/60/5b/70f4c26ce0ba776bc3dae1ca33bcd863f32e0fcacdfb172c1a7ba265b82e/asyncvarlink-0.3.2-py3-none-any.whl", hash = "sha256:d9eee56a378008c36145b4aa4063eeda96bd685f62d3a4205200264109dd3d5a", size = 48615, upload-time = "2026-06-25T05:41:11.203Z" },
+    { url = "https://files.pythonhosted.org/packages/43/6e/0124a54b43bac718fa7fbe1c1f27910ac67a6dd4d232431eef60fafb4c7a/asyncvarlink-0.3.3-py3-none-any.whl", hash = "sha256:f87b0a711ea3bfe6b4b2698450dcfbfdcfc38349532b604d0ce17d3f00ac395e", size = 50020, upload-time = "2026-10-09T10:43:36.299Z" },
 ]
 
 [[package]]
@@ -1560,7 +1560,7 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "asyncvarlink", specifier = "==0.3.2" },
+    { name = "asyncvarlink", specifier = "==0.3.3" },
     { name = "dbus-fast", specifier = "~=5.0" },
     { name = "pyyaml", specifier = "~=6.0" },
     { name = "terok-util", specifier = ">=0.4.0,<0.5.0" },
