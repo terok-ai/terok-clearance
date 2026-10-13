@@ -52,7 +52,7 @@ terok-clearance-hub = "terok_clearance.cli.main:main"
 
 [dependency-groups]
 dev = [
-    "ruff~=0.16.0",
+    "ruff>=0.16,<0.18",
     "pre-commit>=4.0",
     "bandit>=1.7",
     "docstr-coverage>=2.3.2,<3",
