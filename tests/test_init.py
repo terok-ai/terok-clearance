@@ -32,6 +32,7 @@ class TestPublicApi:
             "NOTIFY_BLOCKED",
             "NOTIFY_VERDICT",
             "Notification",
+            "RawClearanceSection",
             "VerdictClient",
             "VerdictServer",
             "create_notifier",

@@ -33,6 +33,7 @@ from asyncvarlink import VarlinkInterfaceRegistry, VarlinkUnixServer, create_uni
 from asyncvarlink.serviceinterface import VarlinkServiceInterface
 
 from terok_clearance.domain.events import VERDICT_ACTIONS, ClearanceEvent, Dossier
+from terok_clearance.domain.verdict_ttl import DEFAULT_VERDICT_TTL, parse_verdict_ttl
 from terok_clearance.hub.ingester import EventIngester
 from terok_clearance.verdict.client import VerdictClient
 from terok_clearance.wire.errors import (
@@ -60,17 +61,8 @@ _SUBSCRIBER_QUEUE_DEPTH = 128
 #: Human-readable duration (``24h``, ``30m``, ``7d``) or ``never``.
 VERDICT_TTL_CONFIG_KEY = "verdict_ttl"
 
-#: Default pending-verdict TTL: 24 hours.  Long enough for overnight
-#: tasks where the operator reviews in the morning; short enough that
-#: a long-running container doesn't accumulate unbounded state.
-#: ``never`` disables expiry (backward-compatible behaviour).
-_DEFAULT_VERDICT_TTL = 24 * 3600.0
-
 #: How often the background cleanup task scans for stale entries.
 _VERDICT_CLEANUP_INTERVAL = 300.0  # 5 minutes
-
-_TTL_RE = re.compile(r"^(\d+(?:\.\d+)?)\s*([smhd])?$", re.IGNORECASE)
-_TTL_UNITS = {"s": 1.0, "m": 60.0, "h": 3600.0, "d": 86400.0, None: 1.0}
 
 #: The only key a per-container hub accepts for its container: the 12-char
 #: short id the shield reader stamps on every event.  The reader takes the
@@ -86,27 +78,6 @@ _SHORT_ID_RE = re.compile(r"[0-9a-fA-F]{12}")
 #: shield.override ..."), and the default wire cap of 256 would cut that
 #: end off a long host name.
 _VERDICT_REASON_MAX_LEN = 512
-
-
-def parse_verdict_ttl(value: str | None) -> float | None:
-    """Parse a TTL string into seconds, or ``None`` for "no expiry".
-
-    Accepts plain seconds (``3600``), unit-suffixed (``24h``, ``30m``,
-    ``7d``), and the special values ``never`` / ``0`` / ``none`` (all
-    meaning "no expiry").  ``None`` input returns the default (24h).
-    Raises ``ValueError`` on malformed input.
-    """
-    if value is None:
-        return _DEFAULT_VERDICT_TTL
-    v = value.strip().lower()
-    if v in ("never", "none", "0", "off", "disabled"):
-        return None
-    m = _TTL_RE.fullmatch(v)
-    if not m:
-        raise ValueError(f"invalid TTL {value!r} (expected e.g. '3600', '24h', '30m', 'never')")
-    num = float(m.group(1))
-    unit = m.group(2)
-    return num * _TTL_UNITS[unit]
 
 
 def _read_verdict_ttl_from_config() -> float | None:
@@ -126,13 +97,13 @@ def _read_verdict_ttl_from_config() -> float | None:
 
         raw = read_config_section("clearance").get(VERDICT_TTL_CONFIG_KEY)
         if raw is None:
-            return _DEFAULT_VERDICT_TTL
+            return DEFAULT_VERDICT_TTL
         return parse_verdict_ttl(raw)
     except Exception:  # noqa: BLE001 - fail-silent; bad config must not crash the hub
         _log.warning(
             "failed to read clearance.verdict_ttl from config — using default", exc_info=True
         )
-        return _DEFAULT_VERDICT_TTL
+        return DEFAULT_VERDICT_TTL
 
 
 #: Reader ``type`` → wire-level ``ClearanceEvent.type``.  Only one event
@@ -289,7 +260,7 @@ class ClearanceHub:
         elif isinstance(verdict_ttl, (int, float)):
             ttl = float(verdict_ttl)
         else:  # pragma: no cover - defensive; type narrowing should prevent this
-            ttl = _DEFAULT_VERDICT_TTL
+            ttl = DEFAULT_VERDICT_TTL
         self._verdict_ttl: float | None = ttl
 
         self._subscribers: set[asyncio.Queue[ClearanceEvent]] = set()
