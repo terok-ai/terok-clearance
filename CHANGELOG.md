@@ -1,10 +1,25 @@
 # Changelog
 
-## [Unreleased] — 0.8.1
+## v0.8.2 — A Man Alone
 
-- Use shared host-PATH lookup while preserving installation-bound Shield companions.
+- Mute the Allow/Deny prompts of one container: `SetMute(container, muted)` mutes or unmutes
+  it, and `Mutes()` returns the muted containers. The hub drops the blocked-connection events
+  of a muted container before it fans them out, so no request waits for an answer that
+  nobody can give. The shield still refuses each connection, and records it while audit is
+  on. A mute can also be given when the hub starts, so no prompt appears before it applies ([#267](https://github.com/terok-ai/terok-clearance/pull/267)).
+- The hub keys each container by its 12-character short id, the id that the NFLOG reader
+  sends. A host-side `shield_down` that names the podman container now clears its pending
+  verdicts ([#267](https://github.com/terok-ai/terok-clearance/pull/267)).
+- A pending verdict expires. `clearance.verdict_ttl` in `config.yml` sets the time; the
+  default is 24 hours, and `never` turns the expiry off. Before, an unanswered entry stayed
+  until the container ended, and the hub grew ([#256](https://github.com/terok-ai/terok-clearance/pull/256)).
+- Python 3.15 is supported.
+
+**Full Changelog**: https://github.com/terok-ai/terok-clearance/compare/v0.8.1...v0.8.2
 
 ## v0.8.1 — At Your Service
+
+- Use shared host-PATH lookup while preserving installation-bound Shield companions.
 
 ## What's Changed
 * fix: align host tool discovery by @sliwowitz in https://github.com/terok-ai/terok-clearance/pull/248
