@@ -51,8 +51,9 @@ from typing import TYPE_CHECKING
 # Lazy re-export map: public name → the submodule that defines it.  The
 # barrel is Tier-A — importing ``terok_clearance`` binds nothing beyond
 # this table, so ``asyncvarlink`` (hub/client/verdict), ``dbus_fast``
-# (subscriber/notifications) and even ``terok_util`` (``COMMANDS``) stay
-# off the import path until the matching symbol is first touched.
+# (subscriber/notifications), ``pydantic`` (config schema) and even
+# ``terok_util`` (``COMMANDS``) stay off the import path until the
+# matching symbol is first touched.
 _LAZY = {
     "ALL_NOTIFY_CATEGORIES": "terok_clearance.client.subscriber",
     "NOTIFY_BLOCKED": "terok_clearance.client.subscriber",
@@ -71,6 +72,8 @@ _LAZY = {
     "create_notifier": "terok_clearance.notifications.factory",
     "default_clearance_socket_path": "terok_clearance.wire.socket",
     "COMMANDS": "terok_clearance.commands",
+    "RawClearanceSection": "terok_clearance.config_schema",
+    "parse_verdict_ttl": "terok_clearance.domain.verdict_ttl",
 }
 
 __all__ = [
@@ -87,10 +90,12 @@ __all__ = [
     "NOTIFY_BLOCKED",
     "NOTIFY_VERDICT",
     "Notification",
+    "RawClearanceSection",
     "VerdictClient",
     "VerdictServer",
     "create_notifier",
     "default_clearance_socket_path",
+    "parse_verdict_ttl",
 ]
 
 
@@ -126,7 +131,9 @@ if TYPE_CHECKING:  # keep IDEs and mypy seeing the full public surface
         MultiSocketSubscriber,
     )
     from terok_clearance.commands import COMMANDS
+    from terok_clearance.config_schema import RawClearanceSection
     from terok_clearance.domain.events import ClearanceEvent
+    from terok_clearance.domain.verdict_ttl import parse_verdict_ttl
     from terok_clearance.hub.server import ClearanceHub
     from terok_clearance.notifications.callback import CallbackNotifier, Notification
     from terok_clearance.notifications.factory import create_notifier

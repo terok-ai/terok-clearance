@@ -563,17 +563,17 @@ class TestParseVerdictTtl:
 
     def test_none_uses_default(self) -> None:
         """Unset env / None falls back to the 24h default."""
-        from terok_clearance.hub.server import _DEFAULT_VERDICT_TTL, parse_verdict_ttl
+        from terok_clearance.domain.verdict_ttl import DEFAULT_VERDICT_TTL, parse_verdict_ttl
 
-        assert parse_verdict_ttl(None) == _DEFAULT_VERDICT_TTL
+        assert parse_verdict_ttl(None) == DEFAULT_VERDICT_TTL
 
     def test_plain_seconds(self) -> None:
-        from terok_clearance.hub.server import parse_verdict_ttl
+        from terok_clearance.domain.verdict_ttl import parse_verdict_ttl
 
         assert parse_verdict_ttl("3600") == 3600.0
 
     def test_unit_suffixes(self) -> None:
-        from terok_clearance.hub.server import parse_verdict_ttl
+        from terok_clearance.domain.verdict_ttl import parse_verdict_ttl
 
         assert parse_verdict_ttl("30m") == 1800.0
         assert parse_verdict_ttl("24h") == 86400.0
@@ -581,21 +581,43 @@ class TestParseVerdictTtl:
         assert parse_verdict_ttl("60s") == 60.0
 
     def test_fractional(self) -> None:
-        from terok_clearance.hub.server import parse_verdict_ttl
+        from terok_clearance.domain.verdict_ttl import parse_verdict_ttl
 
         assert parse_verdict_ttl("1.5h") == 5400.0
 
     def test_never_disables_expiry(self) -> None:
-        from terok_clearance.hub.server import parse_verdict_ttl
+        from terok_clearance.domain.verdict_ttl import parse_verdict_ttl
 
         for v in ("never", "none", "0", "off", "disabled"):
             assert parse_verdict_ttl(v) is None, f"{v!r} should disable expiry"
 
     def test_invalid_raises(self) -> None:
-        from terok_clearance.hub.server import parse_verdict_ttl
+        from terok_clearance.domain.verdict_ttl import parse_verdict_ttl
 
         with pytest.raises(ValueError):
             parse_verdict_ttl("abc")
+
+    def test_yaml_number_counts_as_seconds(self) -> None:
+        """A schema validates parsed YAML, where an unquoted ``3600`` is a number."""
+        from terok_clearance.domain.verdict_ttl import parse_verdict_ttl
+
+        assert parse_verdict_ttl(3600) == 3600.0
+        assert parse_verdict_ttl(1.5) == 1.5
+
+    @pytest.mark.parametrize("zero", [0, 0.0, "0", "0.0", "0s", "0h"])
+    def test_zero_duration_disables_expiry(self, zero: object) -> None:
+        """Every spelling of zero means "no expiry", never "expire at once"."""
+        from terok_clearance.domain.verdict_ttl import parse_verdict_ttl
+
+        assert parse_verdict_ttl(zero) is None
+
+    @pytest.mark.parametrize("value", [True, False, [3600], {"hours": 24}, ""])
+    def test_what_is_no_duration_raises(self, value: object) -> None:
+        """YAML reads ``on`` and ``off`` as booleans; neither they nor a collection is a TTL."""
+        from terok_clearance.domain.verdict_ttl import parse_verdict_ttl
+
+        with pytest.raises(ValueError):
+            parse_verdict_ttl(value)
 
 
 class TestVerdictTtlExpiry:
@@ -632,14 +654,15 @@ class TestVerdictTtlExpiry:
 
     def test_config_read_failure_falls_back_to_default(self, monkeypatch) -> None:
         """Config read failure falls back to the 24h default."""
-        from terok_clearance.hub.server import _DEFAULT_VERDICT_TTL, ClearanceHub
+        from terok_clearance.domain.verdict_ttl import DEFAULT_VERDICT_TTL
+        from terok_clearance.hub.server import ClearanceHub
 
         monkeypatch.setattr(
             "terok_clearance.hub.server._read_verdict_ttl_from_config",
-            lambda: _DEFAULT_VERDICT_TTL,
+            lambda: DEFAULT_VERDICT_TTL,
         )
         hub = ClearanceHub()
-        assert hub.verdict_ttl == _DEFAULT_VERDICT_TTL
+        assert hub.verdict_ttl == DEFAULT_VERDICT_TTL
 
     def test_cleanup_removes_stale_entries(self) -> None:
         """Entries older than the TTL are removed by cleanup."""
@@ -718,13 +741,14 @@ class TestReadVerdictTtlFromConfig:
 
     def test_absent_key_returns_default(self, monkeypatch) -> None:
         """No clearance.verdict_ttl key → 24h default."""
-        from terok_clearance.hub.server import _DEFAULT_VERDICT_TTL, _read_verdict_ttl_from_config
+        from terok_clearance.domain.verdict_ttl import DEFAULT_VERDICT_TTL
+        from terok_clearance.hub.server import _read_verdict_ttl_from_config
 
         monkeypatch.setattr(
             "terok_util.paths.read_config_section",
             lambda section: {},
         )
-        assert _read_verdict_ttl_from_config() == _DEFAULT_VERDICT_TTL
+        assert _read_verdict_ttl_from_config() == DEFAULT_VERDICT_TTL
 
     def test_parses_duration_string(self, monkeypatch) -> None:
         """Config value '1h' → 3600 seconds."""
@@ -748,23 +772,25 @@ class TestReadVerdictTtlFromConfig:
 
     def test_invalid_value_falls_back_to_default(self, monkeypatch) -> None:
         """Invalid config value → 24h default (fail-silent)."""
-        from terok_clearance.hub.server import _DEFAULT_VERDICT_TTL, _read_verdict_ttl_from_config
+        from terok_clearance.domain.verdict_ttl import DEFAULT_VERDICT_TTL
+        from terok_clearance.hub.server import _read_verdict_ttl_from_config
 
         monkeypatch.setattr(
             "terok_util.paths.read_config_section",
             lambda section: {"verdict_ttl": "garbage"} if section == "clearance" else {},
         )
-        assert _read_verdict_ttl_from_config() == _DEFAULT_VERDICT_TTL
+        assert _read_verdict_ttl_from_config() == DEFAULT_VERDICT_TTL
 
     def test_read_failure_falls_back_to_default(self, monkeypatch) -> None:
         """Config read exception → 24h default (fail-silent)."""
-        from terok_clearance.hub.server import _DEFAULT_VERDICT_TTL, _read_verdict_ttl_from_config
+        from terok_clearance.domain.verdict_ttl import DEFAULT_VERDICT_TTL
+        from terok_clearance.hub.server import _read_verdict_ttl_from_config
 
         def _boom(section: str) -> dict:
             raise RuntimeError("config unreadable")
 
         monkeypatch.setattr("terok_util.paths.read_config_section", _boom)
-        assert _read_verdict_ttl_from_config() == _DEFAULT_VERDICT_TTL
+        assert _read_verdict_ttl_from_config() == DEFAULT_VERDICT_TTL
 
     def test_timestamp_preserved_on_shield_failure(self) -> None:
         """A failed shield call restores the binding with its original timestamp."""

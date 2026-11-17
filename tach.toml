@@ -54,6 +54,13 @@ path = "terok_clearance.domain.events"
 layer = "domain"
 depends_on = []
 
+# The grammar of ``clearance.verdict_ttl``, shared by the hub and the
+# config schema so neither has to import the other.
+[[modules]]
+path = "terok_clearance.domain.verdict_ttl"
+layer = "domain"
+depends_on = []
+
 
 # ── Wire layer ──────────────────────────────────────────────────────
 

@@ -33,6 +33,25 @@ def test_bare_import_pulls_no_transport_deps():
     assert _run(probe) == "[]"
 
 
+def test_hub_and_config_schema_stay_out_of_each_others_dependencies():
+    """The hub and the TTL parser load no pydantic; the config schema loads no transport tree.
+
+    The hub runs once per container, in a process that parses the TTL its
+    launcher hands it, so neither may pay for a schema library.  A package
+    that composes the schema must not pay for varlink.
+    """
+    hub = (
+        "import sys, terok_clearance.hub.server; terok_clearance.parse_verdict_ttl; "
+        "print('pydantic' in sys.modules)"
+    )
+    schema = (
+        "import sys, terok_clearance; terok_clearance.RawClearanceSection; "
+        "print(sorted({'asyncvarlink', 'dbus_fast'} & set(sys.modules)))"
+    )
+    assert _run(hub) == "False"
+    assert _run(schema) == "[]"
+
+
 def test_verb_help_imports_only_that_verb():
     """``terok-clearance-hub notify --help`` loads the notify verb, no others."""
     probe = (
