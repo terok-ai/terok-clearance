@@ -73,6 +73,7 @@ _LAZY = {
     "default_clearance_socket_path": "terok_clearance.wire.socket",
     "COMMANDS": "terok_clearance.commands",
     "RawClearanceSection": "terok_clearance.config_schema",
+    "parse_verdict_ttl": "terok_clearance.domain.verdict_ttl",
 }
 
 __all__ = [
@@ -94,6 +95,7 @@ __all__ = [
     "VerdictServer",
     "create_notifier",
     "default_clearance_socket_path",
+    "parse_verdict_ttl",
 ]
 
 
@@ -131,6 +133,7 @@ if TYPE_CHECKING:  # keep IDEs and mypy seeing the full public surface
     from terok_clearance.commands import COMMANDS
     from terok_clearance.config_schema import RawClearanceSection
     from terok_clearance.domain.events import ClearanceEvent
+    from terok_clearance.domain.verdict_ttl import parse_verdict_ttl
     from terok_clearance.hub.server import ClearanceHub
     from terok_clearance.notifications.callback import CallbackNotifier, Notification
     from terok_clearance.notifications.factory import create_notifier

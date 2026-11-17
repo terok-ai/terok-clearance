@@ -37,6 +37,7 @@ class TestPublicApi:
             "VerdictServer",
             "create_notifier",
             "default_clearance_socket_path",
+            "parse_verdict_ttl",
         }
         assert set(terok_clearance.__all__) == expected
 
