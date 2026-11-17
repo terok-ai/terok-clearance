@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.8.3 — Twenty-Six Hours
+
+## What's Changed
+* feat: publish the schema of the clearance config section in https://github.com/terok-ai/terok-clearance/pull/282
+
+**Full Changelog**: https://github.com/terok-ai/terok-clearance/compare/v0.8.2...v0.8.3
+
 ## v0.8.2 — A Man Alone
 
 - Mute the Allow/Deny prompts of one container: `SetMute(container, muted)` mutes or unmutes
