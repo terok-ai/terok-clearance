@@ -5,8 +5,8 @@
 - Mute the Allow/Deny prompts of one container: `SetMute(container, muted)` mutes or unmutes
   it, and `Mutes()` returns the muted containers. The hub drops the blocked-connection events
   of a muted container before it fans them out, so no request waits for an answer that
-  nobody can give. The shield still refuses and records each connection. A mute can also be
-  given when the hub starts, so no prompt appears before it applies ([#267](https://github.com/terok-ai/terok-clearance/pull/267)).
+  nobody can give. The shield still refuses each connection, and records it while audit is
+  on. A mute can also be given when the hub starts, so no prompt appears before it applies ([#267](https://github.com/terok-ai/terok-clearance/pull/267)).
 - The hub keys each container by its 12-character short id, the id that the NFLOG reader
   sends. A host-side `shield_down` that names the podman container now clears its pending
   verdicts ([#267](https://github.com/terok-ai/terok-clearance/pull/267)).
