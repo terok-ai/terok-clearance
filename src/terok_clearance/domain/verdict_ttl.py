@@ -7,7 +7,10 @@ One definition serves both readers of the key.  The hub parses the value
 that it finds in ``config.yml``, and
 [`RawClearanceSection`][terok_clearance.config_schema.RawClearanceSection]
 validates the value with the same function, so what a composed schema
-accepts is what the hub honours.
+accepts is what the hub honours.  The two see the value differently:
+terok-util's layered reader hands the hub every value as text, while a
+schema validates the parsed YAML, where a number is still a number.  The
+parser therefore takes both.
 
 The module imports nothing beyond the standard library, because each
 reader must stay free of the other's dependencies: the hub of pydantic,

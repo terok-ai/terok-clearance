@@ -598,7 +598,7 @@ class TestParseVerdictTtl:
             parse_verdict_ttl("abc")
 
     def test_yaml_number_counts_as_seconds(self) -> None:
-        """An unquoted ``3600`` reaches the parser as a number, not as text."""
+        """A schema validates parsed YAML, where an unquoted ``3600`` is a number."""
         from terok_clearance.domain.verdict_ttl import parse_verdict_ttl
 
         assert parse_verdict_ttl(3600) == 3600.0
@@ -757,16 +757,6 @@ class TestReadVerdictTtlFromConfig:
         monkeypatch.setattr(
             "terok_util.paths.read_config_section",
             lambda section: {"verdict_ttl": "1h"} if section == "clearance" else {},
-        )
-        assert _read_verdict_ttl_from_config() == 3600.0
-
-    def test_yaml_number_is_read_as_seconds(self, monkeypatch) -> None:
-        """Config value ``3600`` without quotes → 3600 seconds, not the default."""
-        from terok_clearance.hub.server import _read_verdict_ttl_from_config
-
-        monkeypatch.setattr(
-            "terok_util.paths.read_config_section",
-            lambda section: {"verdict_ttl": 3600} if section == "clearance" else {},
         )
         assert _read_verdict_ttl_from_config() == 3600.0
 
