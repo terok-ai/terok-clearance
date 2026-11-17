@@ -603,7 +603,13 @@ class TestParseVerdictTtl:
 
         assert parse_verdict_ttl(3600) == 3600.0
         assert parse_verdict_ttl(1.5) == 1.5
-        assert parse_verdict_ttl(0) is None
+
+    @pytest.mark.parametrize("zero", [0, 0.0, "0", "0.0", "0s", "0h"])
+    def test_zero_duration_disables_expiry(self, zero: object) -> None:
+        """Every spelling of zero means "no expiry", never "expire at once"."""
+        from terok_clearance.domain.verdict_ttl import parse_verdict_ttl
+
+        assert parse_verdict_ttl(zero) is None
 
     @pytest.mark.parametrize("value", [True, False, [3600], {"hours": 24}, ""])
     def test_what_is_no_duration_raises(self, value: object) -> None:

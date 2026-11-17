@@ -10,7 +10,7 @@ from terok_clearance import RawClearanceSection
 from terok_clearance.domain.verdict_ttl import DEFAULT_VERDICT_TTL, parse_verdict_ttl
 from terok_clearance.hub import server as hub
 
-_USABLE_TTLS = ["24h", "30m", "7d", "60s", "1.5h", "3600", 3600, 1.5, "never", "none", 0]
+_USABLE_TTLS = ["24h", "30m", "7d", "60s", "1.5h", "3600", 3600, 1.5, "never", "none", 0, 0.0]
 _UNUSABLE_TTLS = ["abc", "5 minutes", "", True, False, [3600], {"hours": 24}]
 
 

@@ -31,18 +31,20 @@ def parse_verdict_ttl(value: str | float | None) -> float | None:
 
     Accepts plain seconds (``3600``, as text or as the number YAML makes
     of it), unit-suffixed (``24h``, ``30m``, ``7d``), and the special
-    values ``never`` / ``0`` / ``none`` (all meaning "no expiry").
+    values ``never`` / ``none`` (both meaning "no expiry").  A zero
+    duration (``0``, ``0.0``, ``0s``) also means "no expiry": a pending
+    verdict that expires at once is never what an operator asks for.
     ``None`` input returns the default (24h).
     Raises ``ValueError`` on malformed input.
     """
     if value is None:
         return DEFAULT_VERDICT_TTL
     v = str(value).strip().lower()
-    if v in ("never", "none", "0", "off", "disabled"):
+    if v in ("never", "none", "off", "disabled"):
         return None
     m = _TTL_RE.fullmatch(v)
     if not m:
         raise ValueError(f"invalid TTL {value!r} (expected e.g. '3600', '24h', '30m', 'never')")
     num = float(m.group(1))
     unit = m.group(2)
-    return num * _TTL_UNITS[unit]
+    return num * _TTL_UNITS[unit] or None
